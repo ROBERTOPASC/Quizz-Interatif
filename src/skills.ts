@@ -1,0 +1,210 @@
+import { Calendar, Building2, Globe, Clock, ShieldCheck, Hash, Sparkles } from 'lucide-react';
+
+export const FACT_SHEET_TOPICS = [
+  { id: 'institutions', label: 'Institutions et organes' },
+  { id: 'history', label: 'Histoire et traités' },
+  { id: 'policies', label: 'Politiques communes' },
+  { id: 'law', label: 'Droit de l\'UE' },
+  { id: 'budget', label: 'Budget de l\'UE' },
+];
+
+export const EU_SUBTYPES = [
+  {
+    id: 'all_knowledge',
+    title: "QCM Toute Connaissance (Base Globale)",
+    description: "Un test complet balayant TOUTES les thématiques (Dates, Institutions, Politiques, Histoire, Traités, Chiffres) extraites de vos documents.",
+    icon: Sparkles,
+    badge: "Toute Connaissance RAG"
+  },
+  {
+    id: 'dates',
+    title: "QCM Dates & Chronologie",
+    description: "Dates clés, chronologie des événements, signature, ratification et entrée en vigueur des traités.",
+    icon: Calendar,
+    badge: "Dates & Chronologie"
+  },
+  {
+    id: 'institutions',
+    title: "QCM Institutions & Organes",
+    description: "Parlement européen, Conseil européen, Conseil de l'UE, Commission, CJUE, BCE, Cour des comptes et agences.",
+    icon: Building2,
+    badge: "Institutions & Organes"
+  },
+  {
+    id: 'policies',
+    title: "QCM Politiques Européennes",
+    description: "Pacte Vert (Green Deal), PAC, Marché Unique, politique de concurrence, numérique, cohésion et PESC.",
+    icon: Globe,
+    badge: "Politiques Communes"
+  },
+  {
+    id: 'history',
+    title: "QCM Histoire & Construction",
+    description: "Pères fondateurs, Déclaration Schuman, vagues d'élargissement successives et grandes étapes historiques.",
+    icon: Clock,
+    badge: "Histoire UE"
+  },
+  {
+    id: 'treaties',
+    title: "QCM Traités & Droit de l'UE",
+    description: "CECA, Rome, Maastricht, Lisbonne, directives, règlements, primauté, effet direct et jurisprudence.",
+    icon: ShieldCheck,
+    badge: "Traités & Droit"
+  },
+  {
+    id: 'figures',
+    title: "QCM Données & Chiffres Clés",
+    description: "Budget de l'UE, Cadre Financier Pluriannuel, pourcentages, démographie et statistiques des 27 États.",
+    icon: Hash,
+    badge: "Chiffres & Statistiques"
+  }
+];
+
+export const FACT_SHEET_SKILLS: Record<string, string> = {
+  institutions: `
+# SKILL / COMPÉTENCE RAG : INSTITUTIONS ET ORGANES DE L'UE
+## CONSIGNES DE FILTRAGE STRICT
+Tu dois analyser le document et traiter EXCLUSIVEMENT des institutions, organes, agences et organismes de l'UE (ex: Parlement européen, Conseil de l'UE, Conseil européen, Commission, CJUE, BCE, Cour des comptes, SEAE, etc.).
+- Pour chaque institution/organe identifié :
+  1. Nom de l'institution ou de l'organe (term)
+  2. Sa date de création, d'entrée en vigueur ou sa base juridique dans les traités (date)
+  3. Ses rôles principaux, buts et objectifs statutaires (explanation)
+  4. Un exemple concret tiré du texte concernant ses actions, sa composition ou ses compétences (example)
+- Ne traiter AUCUN sujet non lié aux institutions.
+`,
+  history: `
+# SKILL / COMPÉTENCE RAG : HISTOIRE ET TRAITÉS DE L'UE
+## CONSIGNES DE FILTRAGE STRICT
+Tu dois analyser le document et traiter EXCLUSIVEMENT de l'histoire de la construction européenne, des traités fondateurs et révisés (CECA, Rome, AUE, Maastricht, Amsterdam, Nice, Lisbonne) et des étapes clés.
+- Pour chaque traité ou événement historique identifié :
+  1. Nom du traité ou de l'étape historique (term)
+  2. Date de signature et/ou d'entrée en vigueur (date)
+  3. Contexte historique approfondi, motifs politiques et liens explicites avec les traités précédents (explanation)
+  4. Un exemple d'innovation majeure ou de modification institutionnelle apportée par ce traité (example)
+`,
+  policies: `
+# SKILL / COMPÉTENCE RAG : POLITIQUES COMMUNES DE L'UE
+## CONSIGNES DE FILTRAGE STRICT
+Tu dois analyser le document et traiter EXCLUSIVEMENT des politiques publiques de l'Union européenne (ex: PAC, Politique de Cohésion, Concurrence, Marché Unique, Pacte Vert / Green Deal, PACTE Migration, PESC/PSDC).
+- Pour chaque politique européenne identifiée :
+  1. Nom de la politique ou du cadre d'action (term)
+  2. Date d'adoption, de mise en œuvre ou de révision majeure (date)
+  3. Buts, objectifs stratégiques, piliers et cadre réglementaire (explanation)
+  4. Un exemple concret d'application, de financement ou de projet dans les États membres (example)
+`,
+  law: `
+# SKILL / COMPÉTENCE RAG : DROIT ET PRINCIPES DE L'UE
+## CONSIGNES DE FILTRAGE STRICT
+Tu dois analyser le document et traiter EXCLUSIVEMENT des sources du droit de l'UE, des principes juridiques cardinaux et de la jurisprudence.
+- Pour chaque principe ou acte juridique :
+  1. Principe, type d'acte (Règlement, Directive, Décision) ou Arrêt phare (term)
+  2. Date d'adoption, d'entrée en vigueur ou de rendu d'arrêt (date)
+  3. Explication juridique (portée, primauté, effet direct, subsidiarité, proportionnalité) (explanation)
+  4. Exemple concret d'application jurisprudentielle ou transposition en droit national (example)
+`,
+  budget: `
+# SKILL / COMPÉTENCE RAG : BUDGET ET FINANCES DE L'UE
+## CONSIGNES DE FILTRAGE STRICT
+Tu dois analyser le document et traiter EXCLUSIVEMENT des finances, du budget européen, du Cadre Financier Pluriannuel (CFP), des ressources propres et des contrôles financiers.
+- Pour chaque élément budgétaire :
+  1. Nom de l'instrument financier, du CFP ou du mécanisme (term)
+  2. Période ou date de référence (date)
+  3. Explication des règles de financement, de la procédure budgétaire ou des compétences de contrôle (explanation)
+  4. Exemple d'allocation de fonds ou de cas d'audit (example)
+`,
+  concepts: `
+# SKILL / COMPÉTENCE RAG : CONCEPTS GÉNÉRAUX ET SYNTHÈSE
+## CONSIGNES DE FILTRAGE STRICT
+Extrais les concepts, notions et termes clés du document.
+- Pour chaque concept :
+  1. Intitulé du concept/terme (term)
+  2. Date associée si disponible (date)
+  3. Explication détaillée (explanation)
+  4. Exemple d'illustration concret (example)
+`
+};
+
+export const QCM_SKILLS: Record<string, string> = {
+  numerical: `
+# COMPETENCE : RAISONNEMENT NUMÉRIQUE EPSO AD5
+## OBJECTIF
+Évaluer la capacité du candidat à tirer des conclusions logiques à partir de données numériques (tableaux ou textes).
+
+## CONSIGNES STRICTES DE RÉDACTION
+1. **Contexte** : Fournir systématiquement un contexte de données réaliste (tableaux Markdown avec des statistiques, budgets, démographie).
+2. **Types de calculs** : Pourcentages, ratios, règles de trois, interprétation de données.
+3. **Distracteurs** : Les 3 mauvaises réponses doivent correspondre à des erreurs de calcul communes (ex: oublier une étape, inverser ratio).
+4. **Explication** : Doit être une démonstration pas-à-pas de la méthode la plus rapide et logique pour arriver au résultat.
+`,
+  verbal: `
+# COMPETENCE : RAISONNEMENT VERBAL EPSO AD5
+## OBJECTIF
+Évaluer la capacité du candidat à analyser des informations complexes dans un texte institutionnel.
+
+## CONSIGNES STRICTES DE RÉDACTION
+1. **Contexte** : Texte formel (100-150 mots) de type institutionnel, rapport de l'UE ou article scientifique.
+2. **Formulation** : Demander "Selon le texte, laquelle de ces affirmations est correcte ?" ou "Que peut-on déduire ?".
+3. **Distracteurs** : Les mauvaises réponses doivent utiliser des pièges typiques EPSO : "extrapolation (non mentionné)", "inversion de sens", "généralisation abusive".
+4. **Explication** : Justifier la bonne réponse par une citation du texte et expliquer brièvement pourquoi chaque distracteur est invalide.
+`,
+  eu: `
+# COMPETENCE : CONNAISSANCE DE L'UNION EUROPÉENNE
+## OBJECTIF
+Évaluer l'expertise sur les institutions, les politiques, le droit et l'histoire de l'UE.
+
+## CONSIGNES STRICTES DE RÉDACTION
+1. **Domaines** : Cadre institutionnel (rôles respectifs), Traités (Maastricht, Lisbonne, etc.), Politiques (PAC, Green Deal), Droit et Chiffres clés.
+2. **Précision** : Les questions doivent être sans ambiguïté et cibler des faits précis basés sur les documents sources.
+3. **Explication** : Doit être riche et didactique, rappelant le contexte historique, juridique ou textuel exact de la réponse.
+`,
+  digcomp: `
+# COMPETENCE : COMPÉTENCES NUMÉRIQUES (DIGCOMP 2.2)
+## OBJECTIF
+Évaluer la maîtrise des concepts numériques selon le cadre européen DigComp 2.2.
+
+## CONSIGNES STRICTES DE RÉDACTION
+1. **Domaines** : Sécurité des données, traitement de l'information, communication en ligne, résolution de problèmes techniques.
+2. **Format** : Privilégier des mises en situation de la vie professionnelle ("Vous recevez un email...", "Vous devez sécuriser...").
+3. **Explication** : Rappeler les bonnes pratiques professionnelles et de cybersécurité liées à la question.
+`,
+  english: `
+# COMPETENCE : ANGLAIS (EUFTE)
+## OBJECTIF
+Évaluer l'anglais professionnel, administratif et institutionnel niveau B2/C1.
+
+## CONSIGNES STRICTES DE RÉDACTION
+1. **Contexte** : Les phrases à compléter ou à analyser doivent sembler extraites de mémos de la Commission ou de directives.
+2. **Difficulté** : Pièges grammaticaux classiques (false friends, prepositions, phrasal verbs, temps complexes).
+3. **Explication** : Rédigée en FRANÇAIS, elle doit expliquer la règle de grammaire précise ou la nuance lexicale testée.
+`
+};
+
+export const DOCUMENT_ANALYSIS_SKILL = `
+# SKILL / COMPÉTENCE : ANALYSE ET SYNTHÈSE DE DOCUMENT EPSO (RAG)
+## OBJECTIF
+Extraire la substance fondamentale d'un document ou rapport pour ressortir l'ensemble des informations clés (synthèse exécutive, données chiffrées, acteurs, enseignements majeurs, vocabulaire et chronologie).
+
+## CONSIGNES D'EXTRACTION STRICTES
+1. **Synthèse globale (summary)** : Rédiger un résumé exécutif fluide, approfondi et structuré.
+2. **Données & Chiffres clés (keyFigures)** : Extraire tous les montants, pourcentages, statistiques et dates chiffrées avec leur contexte exact.
+3. **Acteurs & Institutions (entities)** : Lister les institutions, organes, agences ou pays mentionnés avec leurs rôles statutaires.
+4. **Points clés incontournables (takeaways)** : Lister 5 à 10 enseignements fondamentaux indispensables pour un candidat EPSO.
+5. **Vocabulaire & Sigles (vocabulary)** : Lister les termes techniques, juridiques ou acronymes avec leurs définitions exactes tirées du texte.
+6. **Chronologie & Traités (timeline)** : Extraire les étapes chronologiques, dates et traités cités.
+`;
+
+export const FLASHCARD_SKILL = `
+# SKILL / COMPÉTENCE : CRÉATION DE FLASHCARDS DE RÉVISION EPSO
+## OBJECTIF
+Concevoir des cartes mémoires (flashcards) bilatérales hautement pédagogiques pour une mémorisation rapide des notions clés.
+
+## CONSIGNES STRICTES
+1. **Question / Concept (Recto)** : Intitulé précis, concis et direct.
+2. **Définition / Explication (Verso)** : Réponse claire, structurée et complète.
+`;
+
+export const ESSAY_SKILL = `
+# SKILL / COMPÉTENCE : ÉVALUATION ÉPREUVE RÉDACTIONNELLE / ESSAY EPSO
+## OBJECTIF
+Évaluer une dissertation ou note de synthèse administrative selon les critères d'excellence des concours européens EPSO (Clarté, Structure, Argumentation, Vocabulaire institutionnel, Maîtrise de la langue).
+`;
