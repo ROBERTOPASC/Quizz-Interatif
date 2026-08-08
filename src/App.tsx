@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import * as mammoth from 'mammoth';
 import { get, set } from 'idb-keyval';
-import { UploadCloud, FileText, CheckCircle, XCircle, RefreshCw, ChevronRight, ChevronLeft, Award, Trash2, Clock, Sun, Moon, Server, Cloud, Settings, BookOpen, Calculator, Globe, Monitor, Layers, Eye, BookOpenCheck, RotateCcw, BrainCircuit, Search, Sparkles, ListChecks, Hash, Calendar, ShieldCheck, Download, Share2, Building2, Folder, FolderPlus, FolderOpen, ChevronDown, FolderTree, Tag, Filter, FolderKanban, Edit3, CornerDownRight, FolderInput, FolderCheck, Home } from 'lucide-react';
+import { UploadCloud, FileText, CheckCircle, XCircle, X, RefreshCw, ChevronRight, ChevronLeft, Award, Trash2, Clock, Sun, Moon, Server, Cloud, Settings, BookOpen, Calculator, Globe, Monitor, Layers, Eye, EyeOff, Key, BookOpenCheck, RotateCcw, BrainCircuit, Search, Sparkles, ListChecks, Hash, Calendar, ShieldCheck, Download, Share2, Building2, Folder, FolderPlus, FolderOpen, ChevronDown, FolderTree, Tag, Filter, FolderKanban, Edit3, CornerDownRight, FolderInput, FolderCheck, Home, Zap, Brain, Database, HardDrive, Save, Check, RotateCw, Layers3, FileSpreadsheet } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -18,9 +18,6 @@ import {
 } from './skills';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
-
-// Initialize Gemini API
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 interface DocumentFolder {
   id: string;
@@ -50,6 +47,28 @@ interface SavedQuiz {
   folderName?: string;
 }
 
+interface SavedFactSheet {
+  id: string;
+  title: string;
+  concepts: FactSheetConcept[];
+  createdAt: number;
+  category?: string;
+  docName?: string;
+  folderId?: string;
+  folderName?: string;
+}
+
+interface SavedFlashcardDeck {
+  id: string;
+  title: string;
+  cards: Flashcard[];
+  createdAt: number;
+  category?: string;
+  docName?: string;
+  folderId?: string;
+  folderName?: string;
+}
+
 interface Flashcard {
   front: string;
   back: string;
@@ -63,11 +82,29 @@ interface FactSheetConcept {
   example: string;
 }
 
+export interface ExtractedNotion {
+  id: string;
+  title: string;
+  category: string;
+  summary: string;
+  keyPoints: string[];
+  sourcePage?: string;
+}
+
+export interface DocumentModule {
+  moduleNumber: number;
+  title: string;
+  description: string;
+  notions: ExtractedNotion[];
+}
+
 interface DocumentAnalysisResult {
   id: string;
   docName: string;
   pageRange?: string;
   summary: string;
+  modules?: DocumentModule[];
+  notions?: ExtractedNotion[];
   keyFigures: Array<{ figure: string; context: string }>;
   entities: Array<{ name: string; role: string }>;
   takeaways: string[];
@@ -94,8 +131,113 @@ export default function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [llmMode, setLlmMode] = useState<'api' | 'local'>('api');
   const [localLlmUrl, setLocalLlmUrl] = useState('http://localhost:11434/v1/chat/completions');
+  const [userApiKey, setUserApiKey] = useState(() => localStorage.getItem('qcm_user_api_key') || '');
+  const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('qcm_selected_model') || 'gemini-2.5-flash');
+  const [modelCategoryTab, setModelCategoryTab] = useState<'flash' | 'pro'>(() => {
+    const cur = localStorage.getItem('qcm_selected_model') || 'gemini-2.5-flash';
+    return cur.includes('pro') ? 'pro' : 'flash';
+  });
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [customModelInput, setCustomModelInput] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [isDbArchitectureModalOpen, setIsDbArchitectureModalOpen] = useState(false);
+  const [dbStorageEstimate, setDbStorageEstimate] = useState<{ usageMB: string, quotaGB: string, percentUsed: string } | null>(null);
   const [currentSeed, setCurrentSeed] = useState<number>(() => Math.floor(Math.random() * 900000) + 100000);
+
+  const refreshStorageEstimate = async () => {
+    if (navigator.storage && navigator.storage.estimate) {
+      try {
+        const estimate = await navigator.storage.estimate();
+        const usageMB = estimate.usage ? (estimate.usage / (1024 * 1024)).toFixed(2) : '0';
+        const quotaGB = estimate.quota ? (estimate.quota / (1024 * 1024 * 1024)).toFixed(2) : '0';
+        const percentUsed = estimate.usage && estimate.quota ? ((estimate.usage / estimate.quota) * 100).toFixed(1) : '0';
+        setDbStorageEstimate({ usageMB, quotaGB, percentUsed });
+      } catch (e) {
+        console.error("Storage estimate error", e);
+      }
+    }
+  };
+
+  const handleExportDatabase = () => {
+    const exportData = {
+      app: "Prepa EPSO AD5 Database",
+      version: "2.0",
+      exportedAt: new Date().toISOString(),
+      stats: {
+        documentsCount: libraryDocuments.length,
+        quizzesCount: savedQuizzes.length,
+        factSheetsCount: savedFactSheets.length,
+        flashcardsCount: savedFlashcards.length,
+        docAnalysesCount: savedDocAnalyses.length,
+        foldersCount: libraryFolders.length,
+      },
+      data: {
+        libraryDocuments: libraryDocuments.map(d => ({ ...d, url: '' })),
+        libraryFolders,
+        savedQuizzes,
+        savedFactSheets,
+        savedFlashcards,
+        savedDocAnalyses,
+      }
+    };
+
+    const jsonBlob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const downloadUrl = URL.createObjectURL(jsonBlob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `epso_ad5_db_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(downloadUrl);
+    setLibraryNotification("📥 Base de données exportée avec succès ! (Sauvegarde JSON complète)");
+  };
+
+  const handleImportDatabase = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const json = JSON.parse(e.target?.result as string);
+        if (json && json.data) {
+          if (Array.isArray(json.data.libraryDocuments)) {
+            setLibraryDocuments(json.data.libraryDocuments);
+            await set('libraryDocuments', json.data.libraryDocuments.map((d: any) => ({ ...d, url: '' })));
+          }
+          if (Array.isArray(json.data.libraryFolders)) {
+            setLibraryFolders(json.data.libraryFolders);
+            await set('libraryFolders', json.data.libraryFolders);
+          }
+          if (Array.isArray(json.data.savedQuizzes)) {
+            setSavedQuizzes(json.data.savedQuizzes);
+            await set('savedQuizzes', json.data.savedQuizzes);
+          }
+          if (Array.isArray(json.data.savedFactSheets)) {
+            setSavedFactSheets(json.data.savedFactSheets);
+            await set('savedFactSheets', json.data.savedFactSheets);
+          }
+          if (Array.isArray(json.data.savedFlashcards)) {
+            setSavedFlashcards(json.data.savedFlashcards);
+            await set('savedFlashcards', json.data.savedFlashcards);
+          }
+          if (Array.isArray(json.data.savedDocAnalyses)) {
+            setSavedDocAnalyses(json.data.savedDocAnalyses);
+            await set('savedDocAnalyses', json.data.savedDocAnalyses);
+          }
+          setLibraryNotification("✅ Base de données restaurée et fusionnée avec succès !");
+          refreshStorageEstimate();
+        } else {
+          alert("Fichier de sauvegarde non valide.");
+        }
+      } catch (err) {
+        console.error("Erreur lors de la restauration DB", err);
+        alert("Erreur lors de la lecture du fichier JSON de sauvegarde.");
+      }
+    };
+    reader.readAsText(file);
+  };
   
   const [uploadedDocument, setUploadedDocument] = useState<{file: File, url: string, numPages: number, type: string} | null>(null);
   const [pdfPageRange, setPdfPageRange] = useState<{start: number, end: number}>({start: 1, end: 1});
@@ -111,6 +253,7 @@ export default function App() {
   const [editingFolder, setEditingFolder] = useState<DocumentFolder | null>(null);
   const [selectedDocIdsForMove, setSelectedDocIdsForMove] = useState<string[]>([]);
   const [moveModalDocIds, setMoveModalDocIds] = useState<string[] | null>(null);
+  const [moveModalResource, setMoveModalResource] = useState<{ type: 'quiz' | 'analysis' | 'fact_sheet' | 'flashcard', id: string, title: string } | null>(null);
   const [draggedDocId, setDraggedDocId] = useState<string | null>(null);
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null | 'root'>(null);
   const [libraryNotification, setLibraryNotification] = useState<string | null>(null);
@@ -164,6 +307,26 @@ export default function App() {
     get('savedDocAnalyses').then((analyses) => {
       if (analyses) setSavedDocAnalyses(analyses);
     }).catch(console.error);
+
+    // Load savedQuizzes from IndexedDB with localStorage fallback/migration
+    get('savedQuizzes').then((quizzes) => {
+      if (quizzes && Array.isArray(quizzes) && quizzes.length > 0) {
+        setSavedQuizzes(quizzes);
+      } else {
+        const loaded = localStorage.getItem('qcm_saved_quizzes');
+        if (loaded) {
+          try {
+            const parsed = JSON.parse(loaded);
+            setSavedQuizzes(parsed);
+            set('savedQuizzes', parsed).catch(console.error);
+          } catch (e) {
+            console.error("Failed to parse saved quizzes from localStorage", e);
+          }
+        }
+      }
+    }).catch(console.error);
+
+    refreshStorageEstimate();
   }, []);
 
   useEffect(() => {
@@ -188,6 +351,12 @@ export default function App() {
   useEffect(() => {
     set('savedDocAnalyses', savedDocAnalyses).catch(console.error);
   }, [savedDocAnalyses]);
+
+  useEffect(() => {
+    if (savedQuizzes.length > 0) {
+      set('savedQuizzes', savedQuizzes).catch(console.error);
+    }
+  }, [savedQuizzes]);
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'qcm' | 'english' | 'fact_sheets' | 'library'>('dashboard');
   const [activeQcmTab, setActiveQcmTab] = useState<'numerical' | 'verbal' | 'eu' | 'digcomp' | 'cognitive'>('numerical');
@@ -321,11 +490,28 @@ export default function App() {
     return <span className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 px-2.5 py-0.5 rounded-full text-[11px] font-bold shrink-0">QCM</span>;
   };
 
-  const saveLlmSettings = (mode: 'api' | 'local', url: string) => {
+  const getAIClient = () => {
+    const key = userApiKey.trim() || process.env.GEMINI_API_KEY || '';
+    return new GoogleGenAI({ apiKey: key });
+  };
+
+  const activeModel = selectedModel.trim() || 'gemini-2.5-flash';
+
+  const saveLlmSettings = (mode: 'api' | 'local', url: string, apiKey?: string, model?: string) => {
     setLlmMode(mode);
     setLocalLlmUrl(url);
     localStorage.setItem('qcm_llm_mode', mode);
     localStorage.setItem('qcm_local_url', url);
+
+    if (apiKey !== undefined) {
+      setUserApiKey(apiKey);
+      localStorage.setItem('qcm_user_api_key', apiKey);
+    }
+
+    if (model !== undefined) {
+      setSelectedModel(model);
+      localStorage.setItem('qcm_selected_model', model);
+    }
   };
 
   // --- FOLDER MANAGEMENT HELPERS ---
@@ -350,7 +536,7 @@ export default function App() {
 
   const handleDeleteFolder = (folderId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (window.confirm("Voulez-vous vraiment supprimer ce dossier ? Les documents qu'il contient seront déplacés à la racine.")) {
+    if (window.confirm("Voulez-vous vraiment supprimer ce dossier ? Les documents et ressources qu'il contient seront déplacés à la racine.")) {
       const getSubfolderIds = (fId: string): string[] => {
         const children = libraryFolders.filter(f => f.parentId === fId).map(f => f.id);
         return [fId, ...children.flatMap(getSubfolderIds)];
@@ -359,6 +545,31 @@ export default function App() {
 
       setLibraryFolders(prev => prev.filter(f => !idsToRemove.includes(f.id)));
       setLibraryDocuments(prev => prev.map(d => d.folderId && idsToRemove.includes(d.folderId) ? { ...d, folderId: null } : d));
+
+      setSavedQuizzes(prev => {
+        const updated = prev.map(q => q.folderId && idsToRemove.includes(q.folderId) ? { ...q, folderId: undefined, folderName: undefined } : q);
+        set('savedQuizzes', updated).catch(console.error);
+        try { localStorage.setItem('qcm_saved_quizzes', JSON.stringify(updated)); } catch (err) {}
+        return updated;
+      });
+
+      setSavedDocAnalyses(prev => {
+        const updated = prev.map(a => a.folderId && idsToRemove.includes(a.folderId) ? { ...a, folderId: undefined, folderName: undefined } : a);
+        set('savedDocAnalyses', updated).catch(console.error);
+        return updated;
+      });
+
+      setSavedFactSheets(prev => {
+        const updated = prev.map(s => s.folderId && idsToRemove.includes(s.folderId) ? { ...s, folderId: undefined, folderName: undefined } : s);
+        set('savedFactSheets', updated).catch(console.error);
+        return updated;
+      });
+
+      setSavedFlashcards(prev => {
+        const updated = prev.map(d => d.folderId && idsToRemove.includes(d.folderId) ? { ...d, folderId: undefined, folderName: undefined } : d);
+        set('savedFlashcards', updated).catch(console.error);
+        return updated;
+      });
 
       if (currentFolderId && idsToRemove.includes(currentFolderId)) {
         setCurrentFolderId(null);
@@ -377,13 +588,94 @@ export default function App() {
     setLibraryDocuments(prev => prev.map(d => docIds.includes(d.id) ? { ...d, folderId: targetFolderId } : d));
     const targetFolder = libraryFolders.find(f => f.id === targetFolderId);
     const folderName = targetFolder ? `"${targetFolder.name}"` : 'la Racine';
-    showLibraryNotification(`✓ ${docIds.length} document(s) déplacé(s) vers ${folderName}`);
+    showLibraryNotification(`${docIds.length} document(s) déplacé(s) vers ${folderName}`);
     setSelectedDocIdsForMove([]);
     setMoveModalDocIds(null);
   };
 
   const moveDocumentToFolder = (docId: string, targetFolderId: string | null) => {
     moveDocumentsToFolder([docId], targetFolderId);
+  };
+
+  const moveResourceToFolder = (
+    type: 'quiz' | 'analysis' | 'fact_sheet' | 'flashcard',
+    resourceId: string,
+    targetFolderId: string | null
+  ) => {
+    const targetFolder = libraryFolders.find(f => f.id === targetFolderId);
+    const targetFolderName = targetFolder ? targetFolder.name : undefined;
+
+    if (type === 'quiz') {
+      setSavedQuizzes(prev => {
+        const updated = prev.map(q => q.id === resourceId ? { ...q, folderId: targetFolderId || undefined, folderName: targetFolderName } : q);
+        set('savedQuizzes', updated).catch(console.error);
+        try { localStorage.setItem('qcm_saved_quizzes', JSON.stringify(updated)); } catch (e) {}
+        return updated;
+      });
+    } else if (type === 'analysis') {
+      setSavedDocAnalyses(prev => {
+        const updated = prev.map(a => a.id === resourceId ? { ...a, folderId: targetFolderId || undefined, folderName: targetFolderName } : a);
+        set('savedDocAnalyses', updated).catch(console.error);
+        return updated;
+      });
+    } else if (type === 'fact_sheet') {
+      setSavedFactSheets(prev => {
+        const updated = prev.map(s => s.id === resourceId ? { ...s, folderId: targetFolderId || undefined, folderName: targetFolderName } : s);
+        set('savedFactSheets', updated).catch(console.error);
+        return updated;
+      });
+    } else if (type === 'flashcard') {
+      setSavedFlashcards(prev => {
+        const updated = prev.map(d => d.id === resourceId ? { ...d, folderId: targetFolderId || undefined, folderName: targetFolderName } : d);
+        set('savedFlashcards', updated).catch(console.error);
+        return updated;
+      });
+    }
+
+    showLibraryNotification(`Élément déplacé vers ${targetFolderName ? `"${targetFolderName}"` : 'la Racine'}`);
+    setMoveModalResource(null);
+  };
+
+  const renderFolderMoveTreeForResource = (
+    resourceType: 'quiz' | 'analysis' | 'fact_sheet' | 'flashcard',
+    resourceId: string,
+    parentId: string | null = null,
+    depth = 0
+  ): React.ReactNode[] => {
+    const children = libraryFolders.filter(f => (f.parentId || null) === parentId);
+    let items: React.ReactNode[] = [];
+    for (const folder of children) {
+      items.push(
+        <div
+          key={folder.id}
+          className="flex items-center justify-between p-3 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/40 transition-all mb-2"
+          style={{ marginLeft: `${depth * 20}px` }}
+        >
+          <div className="flex items-center gap-2.5 min-w-0">
+            {depth > 0 && <CornerDownRight className="w-4 h-4 text-slate-400 shrink-0" />}
+            <Folder className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+              {folder.name}
+            </span>
+          </div>
+          <button
+            onClick={() => moveResourceToFolder(resourceType, resourceId, folder.id)}
+            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg transition-colors shrink-0 flex items-center gap-1 shadow-xs cursor-pointer"
+          >
+            <FolderInput className="w-3.5 h-3.5" />
+            Déplacer ici
+          </button>
+        </div>
+      );
+      items = items.concat(renderFolderMoveTreeForResource(resourceType, resourceId, folder.id, depth + 1));
+    }
+    return items;
+  };
+
+  const matchesGeneratedFolderFilter = (itemFolderId?: string | null) => {
+    if (generatedFolderFilter === 'all') return true;
+    if (generatedFolderFilter === 'root') return !itemFolderId;
+    return itemFolderId === generatedFolderFilter;
   };
 
   const renderFolderMoveTree = (
@@ -454,7 +746,7 @@ export default function App() {
     const children = libraryFolders.filter(f => (f.parentId || null) === parentId);
     let options: React.ReactNode[] = [];
     for (const folder of children) {
-      const indent = "   ".repeat(depth) + (depth > 0 ? "↳ " : "📁 ");
+      const indent = "   ".repeat(depth) + (depth > 0 ? "↳ " : "");
       options.push(
         <option key={folder.id} value={folder.id}>
           {indent}{folder.name} ({getFolderDocumentCount(folder.id)} doc{getFolderDocumentCount(folder.id) > 1 ? 's' : ''})
@@ -538,14 +830,16 @@ export default function App() {
     };
     const updatedQuizzes = [newQuiz, ...savedQuizzes];
     setSavedQuizzes(updatedQuizzes);
-    localStorage.setItem('qcm_saved_quizzes', JSON.stringify(updatedQuizzes));
+    set('savedQuizzes', updatedQuizzes).catch(console.error);
+    try { localStorage.setItem('qcm_saved_quizzes', JSON.stringify(updatedQuizzes)); } catch (e) {}
   };
 
   const deleteQuiz = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const updatedQuizzes = savedQuizzes.filter(q => q.id !== id);
     setSavedQuizzes(updatedQuizzes);
-    localStorage.setItem('qcm_saved_quizzes', JSON.stringify(updatedQuizzes));
+    set('savedQuizzes', updatedQuizzes).catch(console.error);
+    try { localStorage.setItem('qcm_saved_quizzes', JSON.stringify(updatedQuizzes)); } catch (e) {}
   };
 
   const loadQuiz = (quiz: SavedQuiz) => {
@@ -670,8 +964,8 @@ ${extractionPrompt}
     try {
       let extractedQuestions: Question[] = [];
       if (llmMode === 'api') {
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
+        const response = await getAIClient().models.generateContent({
+          model: activeModel,
           contents: fullPromptWithSkill,
           config: {
             responseMimeType: 'application/json',
@@ -855,8 +1149,8 @@ ${recentQuestions.length > 0 ? recentQuestions.map((q: any) => `- ${q.question}`
       let extractedQuestions: Question[] = [];
 
       if (llmMode === 'api') {
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
+        const response = await getAIClient().models.generateContent({
+          model: activeModel,
           contents: fullPromptWithSkill,
           config: {
             responseMimeType: 'application/json',
@@ -1094,8 +1388,8 @@ ${recentQuestions.length > 0 ? recentQuestions.map((q: any) => `- ${q.question}`
 
         let jsonString = "[]";
         if (llmMode === 'api') {
-          const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+          const response = await getAIClient().models.generateContent({
+            model: activeModel,
             contents: fullPrompt,
             config: {
               responseMimeType: 'application/json',
@@ -1276,8 +1570,8 @@ ${recentQuestions.length > 0 ? recentQuestions.map((q: any) => `- ${q.question}`
 
         let jsonString = "[]";
         if (llmMode === 'api') {
-          const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
+          const response = await getAIClient().models.generateContent({
+            model: activeModel,
             contents: fullPrompt,
             config: {
               responseMimeType: 'application/json',
@@ -1403,8 +1697,8 @@ ${text.substring(0, 80000)}
 
       let jsonString = "{}";
       if (llmMode === 'api') {
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
+        const response = await getAIClient().models.generateContent({
+          model: activeModel,
           contents: prompt,
           config: {
             responseMimeType: 'application/json',
@@ -1412,6 +1706,33 @@ ${text.substring(0, 80000)}
               type: Type.OBJECT,
               properties: {
                 summary: { type: Type.STRING, description: "Synthèse détaillée du document" },
+                modules: {
+                  type: Type.ARRAY,
+                  description: "Découpage thématique du document en 2 à 5 modules ou chapitres",
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      moduleNumber: { type: Type.INTEGER },
+                      title: { type: Type.STRING, description: "Intitulé du chapitre/module" },
+                      description: { type: Type.STRING, description: "Brève présentation du périmètre du chapitre" },
+                      notions: {
+                        type: Type.ARRAY,
+                        items: {
+                          type: Type.OBJECT,
+                          properties: {
+                            title: { type: Type.STRING, description: "Nom clair de la notion" },
+                            category: { type: Type.STRING, description: "Domaine de compétence EPSO" },
+                            summary: { type: Type.STRING, description: "Explication synthétique complète" },
+                            keyPoints: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3 à 5 éléments ou règles incontournables" },
+                            sourcePage: { type: Type.STRING, description: "Page ou section de référence" }
+                          },
+                          required: ["title", "category", "summary", "keyPoints"]
+                        }
+                      }
+                    },
+                    required: ["moduleNumber", "title", "description", "notions"]
+                  }
+                },
                 keyFigures: {
                   type: Type.ARRAY,
                   items: {
@@ -1462,7 +1783,7 @@ ${text.substring(0, 80000)}
                   }
                 }
               },
-              required: ["summary", "keyFigures", "entities", "takeaways", "vocabulary", "timeline"]
+              required: ["summary", "modules", "keyFigures", "entities", "takeaways", "vocabulary", "timeline"]
             }
           }
         });
@@ -1489,18 +1810,40 @@ ${text.substring(0, 80000)}
       }
 
       const parsed = JSON.parse(jsonString);
+
+      const rawModules: DocumentModule[] = parsed.modules || [];
+      const extractedModules: DocumentModule[] = rawModules.map((mod, modIdx) => ({
+        moduleNumber: mod.moduleNumber || (modIdx + 1),
+        title: mod.title || `Module ${modIdx + 1}`,
+        description: mod.description || '',
+        notions: (mod.notions || []).map((n: any, nIdx: number) => ({
+          id: `notion-${modIdx + 1}-${nIdx + 1}-${Date.now()}`,
+          title: n.title || `Notion ${nIdx + 1}`,
+          category: n.category || 'Connaissances UE',
+          summary: n.summary || '',
+          keyPoints: n.keyPoints || [],
+          sourcePage: n.sourcePage || (uploadedDocument.type === 'pdf' ? `p.${start}-${end}` : undefined)
+        }))
+      }));
+
+      const allNotions: ExtractedNotion[] = extractedModules.flatMap(m => m.notions);
+
       const analysisObj: DocumentAnalysisResult = {
         id: crypto.randomUUID(),
         docName: file.name,
         pageRange: uploadedDocument.type === 'pdf' ? `p.${start}-${end}` : undefined,
         summary: parsed.summary || 'Aucun résumé disponible.',
+        modules: extractedModules,
+        notions: allNotions,
         keyFigures: parsed.keyFigures || [],
         entities: parsed.entities || [],
         takeaways: parsed.takeaways || [],
         vocabulary: parsed.vocabulary || [],
         timeline: parsed.timeline || [],
         createdAt: Date.now(),
-        seed: seed
+        seed: seed,
+        folderId: uploadedDocument.folderId || undefined,
+        folderName: uploadedDocument.folderId ? libraryFolders.find(f => f.id === uploadedDocument.folderId)?.name : undefined
       };
 
       setDocAnalysisResult(analysisObj);
@@ -1510,6 +1853,324 @@ ${text.substring(0, 80000)}
       console.error(err);
       setError(err.message || 'Erreur lors de l\'analyse du document.');
       setAppState('DOCUMENT_VIEWER');
+    }
+  };
+
+  const generateQuizFromNotion = async (notion: ExtractedNotion, docName?: string) => {
+    setAppState('PROCESSING');
+    setError(null);
+
+    const langInstruction = questionLanguage === 'en' ? 'The ENTIRE output MUST be in English.' : 'Le contenu DOIT être intégralement rédigé en Français.';
+
+    const prompt = `Agis comme un concepteur d'épreuves pour le concours EPSO AD5 Administrateur.
+
+Génère un test de ${questionCount} questions QCM ciblées spécifiquement sur la notion ci-dessous :
+
+NOTION CIBLE :
+- Intitulé : ${notion.title}
+- Domaine/Catégorie : ${notion.category}
+- Explication/Résumé : ${notion.summary}
+- Points clés : ${notion.keyPoints.join(' | ')}
+${docName ? `- Document source : ${docName}` : ''}
+
+${langInstruction}
+
+Chaque question doit comporter 4 options, 1 seule bonne réponse, et une explication pédagogique détaillée.
+Format JSON attendu :
+[
+  {
+    "question": "Texte de la question",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correctAnswerIndex": 0,
+    "explanation": "Explication fondée sur les textes et principes UE."
+  }
+]`;
+
+    try {
+      let resultJSON = "[]";
+      if (llmMode === 'api') {
+        const response = await getAIClient().models.generateContent({
+          model: activeModel,
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  question: { type: Type.STRING },
+                  options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  correctAnswerIndex: { type: Type.INTEGER },
+                  explanation: { type: Type.STRING }
+                },
+                required: ["question", "options", "correctAnswerIndex", "explanation"]
+              }
+            }
+          }
+        });
+        resultJSON = response.text || "[]";
+      } else {
+        const response = await fetch(localLlmUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'llama3',
+            messages: [
+              { role: 'system', content: 'Tu es un expert QCM EPSO AD5 qui génère du JSON array.' },
+              { role: 'user', content: prompt }
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.3
+          })
+        });
+        if (!response.ok) throw new Error(`Local LLM error: ${response.statusText}`);
+        const data = await response.json();
+        resultJSON = data.choices?.[0]?.message?.content || data.response || "[]";
+      }
+
+      const match = resultJSON.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      const parsed = JSON.parse(match ? match[0] : resultJSON);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        setQuestions(parsed);
+        setCurrentQuestionIndex(0);
+        setSelectedAnswerIndex(null);
+        setScore(0);
+        setUserAnswers([]);
+
+        const quizTitle = `QCM Notion : ${notion.title}${docName ? ` (${docName})` : ''}`;
+        const sourceFolderId = docAnalysisResult?.folderId || (docName ? libraryDocuments.find(d => d.name === docName)?.folderId : undefined);
+        const sourceFolderName = sourceFolderId ? libraryFolders.find(f => f.id === sourceFolderId)?.name : undefined;
+
+        const newQuiz: SavedQuiz = {
+          id: crypto.randomUUID(),
+          title: quizTitle,
+          date: new Date().toLocaleDateString(),
+          questions: parsed,
+          category: notion.category,
+          docName: docName,
+          folderId: sourceFolderId || undefined,
+          folderName: sourceFolderName
+        };
+        setSavedQuizzes(prev => [newQuiz, ...prev]);
+
+        setAppState('QUIZ');
+      } else {
+        throw new Error("Format de QCM invalide généré.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Erreur lors de la génération du QCM pour cette notion.");
+      setAppState('DOCUMENT_ANALYSIS');
+    }
+  };
+
+  const generateFactSheetFromNotion = async (notion: ExtractedNotion, docName?: string) => {
+    setAppState('PROCESSING');
+    setError(null);
+
+    const langInstruction = questionLanguage === 'en' ? 'The ENTIRE output MUST be in English.' : 'Le contenu DOIT être intégralement rédigé en Français.';
+
+    const prompt = `Agis comme un professeur expert en préparation aux concours européens EPSO.
+
+Rédige une Fiche de Révision complète et hautement structurée sur la notion ci-dessous :
+
+NOTION :
+- Intitulé : ${notion.title}
+- Catégorie : ${notion.category}
+- Résumé : ${notion.summary}
+- Points clés : ${notion.keyPoints.join(' | ')}
+${docName ? `- Document source : ${docName}` : ''}
+
+${langInstruction}
+
+Format JSON attendu :
+{
+  "title": "Fiche de Révision : ${notion.title}",
+  "concepts": [
+    {
+      "term": "${notion.title}",
+      "definition": "${notion.summary}",
+      "date": "Date ou base juridique dans les traités",
+      "explanation": "Explication approfondie du cadre institutionnel/réglementaire",
+      "example": "Exemple d'application concrète ou jurisprudence"
+    }
+  ]
+}`;
+
+    try {
+      let resultJSON = "{}";
+      if (llmMode === 'api') {
+        const response = await getAIClient().models.generateContent({
+          model: activeModel,
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                concepts: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      term: { type: Type.STRING },
+                      definition: { type: Type.STRING },
+                      date: { type: Type.STRING },
+                      explanation: { type: Type.STRING },
+                      example: { type: Type.STRING }
+                    },
+                    required: ["term", "definition", "explanation", "example"]
+                  }
+                }
+              },
+              required: ["title", "concepts"]
+            }
+          }
+        });
+        resultJSON = response.text || "{}";
+      } else {
+        const response = await fetch(localLlmUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'llama3',
+            messages: [
+              { role: 'system', content: 'Tu es un expert EPSO qui génère des fiches au format JSON.' },
+              { role: 'user', content: prompt }
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.3
+          })
+        });
+        if (!response.ok) throw new Error(`Local LLM error: ${response.statusText}`);
+        const data = await response.json();
+        resultJSON = data.choices?.[0]?.message?.content || data.response || "{}";
+      }
+
+      const parsed = JSON.parse(resultJSON);
+      if (parsed.title && Array.isArray(parsed.concepts)) {
+        const sourceFolderId = docAnalysisResult?.folderId || (docName ? libraryDocuments.find(d => d.name === docName)?.folderId : undefined);
+        const sourceFolderName = sourceFolderId ? libraryFolders.find(f => f.id === sourceFolderId)?.name : undefined;
+
+        const newSheet: SavedFactSheet = {
+          id: crypto.randomUUID(),
+          title: parsed.title,
+          concepts: parsed.concepts,
+          createdAt: Date.now(),
+          category: notion.category,
+          docName: docName,
+          folderId: sourceFolderId || undefined,
+          folderName: sourceFolderName
+        };
+        setSavedFactSheets(prev => [newSheet, ...prev]);
+        setFactSheetContent(newSheet);
+        setAppState('FACT_SHEET');
+      } else {
+        throw new Error("Format de fiche invalide.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Erreur lors de la création de la fiche de révision.");
+      setAppState('DOCUMENT_ANALYSIS');
+    }
+  };
+
+  const generateFlashcardsFromNotion = async (notion: ExtractedNotion, docName?: string) => {
+    setAppState('PROCESSING');
+    setError(null);
+
+    const langInstruction = questionLanguage === 'en' ? 'The ENTIRE output MUST be in English.' : 'Le contenu DOIT être intégralement rédigé en Français.';
+
+    const prompt = `Crée un paquet de 5 à 8 Flashcards de révision (cartes mémoire) pour la mémorisation active de la notion ci-dessous :
+
+NOTION :
+- Intitulé : ${notion.title}
+- Catégorie : ${notion.category}
+- Résumé : ${notion.summary}
+- Points clés : ${notion.keyPoints.join(' | ')}
+
+${langInstruction}
+
+Format JSON attendu :
+[
+  {
+    "front": "Question ou Concept au recto",
+    "back": "Définition précise et explication au verso"
+  }
+]`;
+
+    try {
+      let resultJSON = "[]";
+      if (llmMode === 'api') {
+        const response = await getAIClient().models.generateContent({
+          model: activeModel,
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  front: { type: Type.STRING },
+                  back: { type: Type.STRING }
+                },
+                required: ["front", "back"]
+              }
+            }
+          }
+        });
+        resultJSON = response.text || "[]";
+      } else {
+        const response = await fetch(localLlmUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'llama3',
+            messages: [
+              { role: 'system', content: 'Tu es un concepteur de flashcards au format JSON array.' },
+              { role: 'user', content: prompt }
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.3
+          })
+        });
+        if (!response.ok) throw new Error(`Local LLM error: ${response.statusText}`);
+        const data = await response.json();
+        resultJSON = data.choices?.[0]?.message?.content || data.response || "[]";
+      }
+
+      const match = resultJSON.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      const parsed = JSON.parse(match ? match[0] : resultJSON);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const deckTitle = `Flashcards : ${notion.title}${docName ? ` (${docName})` : ''}`;
+        const sourceFolderId = docAnalysisResult?.folderId || (docName ? libraryDocuments.find(d => d.name === docName)?.folderId : undefined);
+        const sourceFolderName = sourceFolderId ? libraryFolders.find(f => f.id === sourceFolderId)?.name : undefined;
+
+        const newDeck: SavedFlashcardDeck = {
+          id: crypto.randomUUID(),
+          title: deckTitle,
+          cards: parsed,
+          createdAt: Date.now(),
+          category: notion.category,
+          docName: docName,
+          folderId: sourceFolderId || undefined,
+          folderName: sourceFolderName
+        };
+        setSavedFlashcards(prev => [newDeck, ...prev]);
+        setFlashcards(parsed);
+        setCurrentFlashcardIndex(0);
+        setIsFlashcardFlipped(false);
+        setAppState('FLASHCARDS');
+      } else {
+        throw new Error("Format de flashcards invalide.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Erreur lors de la création des flashcards.");
+      setAppState('DOCUMENT_ANALYSIS');
     }
   };
 
@@ -1580,8 +2241,8 @@ Provide an evaluation in JSON format exactly like this:
       let evaluationResult;
 
       if (llmMode === 'api') {
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
+        const response = await getAIClient().models.generateContent({
+          model: activeModel,
           contents: prompt,
           config: {
             responseMimeType: 'application/json',
@@ -1669,8 +2330,8 @@ Provide an evaluation in JSON format exactly like this:
     try {
       let jsonString = "[]";
       if (llmMode === 'api') {
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
+        const response = await getAIClient().models.generateContent({
+          model: activeModel,
           contents: prompt,
           config: {
             responseMimeType: 'application/json',
@@ -1786,8 +2447,8 @@ ${langInstruction}`;
     try {
       let resultJSON = "";
       if (llmMode === 'api') {
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
+        const response = await getAIClient().models.generateContent({
+          model: activeModel,
           contents: prompt,
           config: {
             responseMimeType: 'application/json',
@@ -1915,8 +2576,8 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
     try {
       let jsonString = "[]";
       if (llmMode === 'api') {
-        const response = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
+        const response = await getAIClient().models.generateContent({
+          model: activeModel,
           contents: prompt,
           config: {
             responseMimeType: 'application/json',
@@ -1992,46 +2653,61 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-indigo-100 dark:selection:bg-indigo-900/50 selection:text-indigo-900 dark:selection:text-indigo-100 transition-colors">
-      <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-10 transition-colors">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <div className="min-h-screen bg-[#f8f9fd] dark:bg-slate-950 text-[#191c1f] dark:text-slate-100 font-sans selection:bg-[#76a9c5]/20 selection:text-[#003e54] transition-colors">
+      <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 sticky top-0 z-30 transition-colors shadow-2xs">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             {appState !== 'UPLOAD' && (
               <button 
                 onClick={resetApp}
-                className="flex items-center gap-1 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 px-3 py-1.5 rounded-lg transition-colors"
+                className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300 hover:text-[#2f647e] dark:hover:text-[#76a9c5] bg-slate-100/80 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 px-3.5 py-1.5 rounded-xl transition-all cursor-pointer border border-slate-200/60 dark:border-slate-700"
                 title="Retour au menu principal"
               >
                 <ChevronLeft className="w-4 h-4" />
-                <span className="font-medium text-sm hidden sm:inline">Retour</span>
+                <span className="font-semibold text-xs tracking-wider uppercase hidden sm:inline">Retour</span>
               </button>
             )}
-            <div className="flex items-center gap-2 cursor-pointer" onClick={resetApp}>
-              <div className="bg-blue-600 p-2 rounded-lg text-white shrink-0">
+            <div className="flex items-center gap-2.5 cursor-pointer group" onClick={resetApp}>
+              <div className="bg-[#2f647e] p-2 rounded-xl text-white shrink-0 shadow-xs group-hover:bg-[#244f64] transition-colors">
                 <Award className="w-5 h-5" />
               </div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white hidden sm:block">Prépa EPSO AD5</h1>
+              <div className="flex flex-col">
+                <h1 className="text-xl font-bold tracking-tight font-serif text-[#191c1f] dark:text-white group-hover:text-[#2f647e] dark:group-hover:text-[#76a9c5] transition-colors">Prépa EPSO AD5</h1>
+                <span className="text-[10px] font-semibold text-[#71787d] dark:text-slate-400 tracking-wider uppercase -mt-1 hidden sm:block">Concours Administrateur Horizon</span>
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => {
+                refreshStorageEstimate();
+                setIsDbArchitectureModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-[#003e54] dark:text-[#9acdeb] hover:text-[#002736] bg-[#76a9c5]/15 dark:bg-[#2f647e]/30 hover:bg-[#76a9c5]/25 rounded-xl transition-all cursor-pointer border border-[#2f647e]/20 dark:border-[#76a9c5]/30 shadow-2xs"
+              title="Architecture & Métriques de la Base de Données"
+            >
+              <Database className="w-4 h-4 text-[#2f647e] dark:text-[#76a9c5]" />
+              <span className="hidden sm:inline font-semibold">Base DB</span>
+            </button>
+
             <button
               onClick={() => setShowSettings(true)}
-              className="p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-full transition-colors"
-              title="Settings"
+              className="p-2 text-[#41484c] dark:text-slate-400 hover:text-[#2f647e] dark:hover:text-[#76a9c5] hover:bg-[#76a9c5]/10 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+              title="Paramètres LLM"
             >
               <Settings className="w-5 h-5" />
             </button>
             <button
               onClick={toggleTheme}
-              className="p-2 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-full transition-colors"
-              title="Toggle Theme"
+              className="p-2 text-[#41484c] dark:text-slate-400 hover:text-[#2f647e] dark:hover:text-[#76a9c5] hover:bg-[#76a9c5]/10 dark:hover:bg-slate-800 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+              title="Changer de thème"
             >
               {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
             </button>
             {appState === 'QUIZ' && (
               <div className="flex items-center gap-3">
-                <div className="text-sm font-medium text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full hidden sm:block">
-                  Question {currentQuestionIndex + 1} of {questions.length}
+                <div className="text-xs font-semibold text-[#41484c] dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-xl border border-slate-200 dark:border-slate-700 hidden sm:block">
+                  Question {currentQuestionIndex + 1} / {questions.length}
                 </div>
               </div>
             )}
@@ -2039,12 +2715,15 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         {showSettings && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-md w-full p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Settings</h2>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <Settings className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+                  <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Paramètres LLM</h2>
+                </div>
                 <button
                   onClick={() => setShowSettings(false)}
                   className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-full transition-colors"
@@ -2055,53 +2734,474 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
               
               <div className="space-y-6">
                 <div>
-                  <h3 className="text-sm font-medium text-slate-900 dark:text-white mb-3">LLM Mode</h3>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white mb-3">Mode de Génération</h3>
                   <div className="grid grid-cols-2 gap-3">
                     <button
-                      onClick={() => saveLlmSettings('api', localLlmUrl)}
+                      onClick={() => saveLlmSettings('api', localLlmUrl, userApiKey, selectedModel)}
                       className={cn(
                         "flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition-all",
                         llmMode === 'api' 
-                          ? "border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300" 
+                          ? "border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 font-semibold" 
                           : "border-slate-200 hover:border-indigo-300 text-slate-600 dark:border-slate-700 dark:text-slate-400"
                       )}
                     >
                       <Cloud className="w-5 h-5" />
-                      <span className="font-medium">Gemini API</span>
+                      <span>Gemini API</span>
                     </button>
                     <button
-                      onClick={() => saveLlmSettings('local', localLlmUrl)}
+                      onClick={() => saveLlmSettings('local', localLlmUrl, userApiKey, selectedModel)}
                       className={cn(
                         "flex items-center justify-center gap-2 p-3 rounded-xl border-2 transition-all",
                         llmMode === 'local' 
-                          ? "border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300" 
+                          ? "border-indigo-600 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 font-semibold" 
                           : "border-slate-200 hover:border-indigo-300 text-slate-600 dark:border-slate-700 dark:text-slate-400"
                       )}
                     >
                       <Server className="w-5 h-5" />
-                      <span className="font-medium">Local LLM</span>
+                      <span>LLM Local</span>
                     </button>
                   </div>
                 </div>
 
+                {llmMode === 'api' && (
+                  <div className="space-y-5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    {/* Clé API Gemini */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                          <Key className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                          Clé API Gemini
+                        </label>
+                        {userApiKey.trim() ? (
+                          <span className="text-xs bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 px-2.5 py-0.5 rounded-full font-medium">
+                            Clé personnalisée active
+                          </span>
+                        ) : (
+                          <span className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2.5 py-0.5 rounded-full font-medium">
+                            Clé système par défaut
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="relative">
+                        <input
+                          type={showApiKey ? "text" : "password"}
+                          value={userApiKey}
+                          onChange={(e) => saveLlmSettings('api', localLlmUrl, e.target.value, selectedModel)}
+                          className="w-full pl-4 pr-10 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+                          placeholder="Collez votre clé API Gemini (AIzaSy...)"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowApiKey(!showApiKey)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 p-1 rounded-md"
+                          title={showApiKey ? "Masquer la clé" : "Afficher la clé"}
+                        >
+                          {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      
+                      {userApiKey.trim() && (
+                        <div className="mt-2 flex items-center justify-between">
+                          <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <ShieldCheck className="w-3.5 h-3.5" /> Clé stockée dans le navigateur (LocalStorage)
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => saveLlmSettings('api', localLlmUrl, '', selectedModel)}
+                            className="text-xs text-rose-600 dark:text-rose-400 hover:underline font-medium"
+                          >
+                            Effacer la clé
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="mt-2.5 p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 text-xs text-blue-900 dark:text-blue-200 space-y-1">
+                        <div className="font-semibold flex items-center gap-1.5 text-blue-800 dark:text-blue-300">
+                          <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          Conseil Sécurité Tablettes & Appareils
+                        </div>
+                        <p className="text-[11px] leading-relaxed text-blue-800/90 dark:text-blue-300/90">
+                          Si vous laissez ce champ <strong>vide</strong>, l'application utilise la <strong>clé serveur intégrée</strong>, ce qui est l'option la plus sécurisée (aucune clé stockée sur votre tablette).
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Modèle Gemini - Sous-classements Flash vs Pro */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                          Choix du Modèle Gemini
+                        </label>
+                        <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                          {selectedModel}
+                        </span>
+                      </div>
+
+                      {/* Selecteur de sous-classement (Gamme Flash vs Gamme Pro) */}
+                      <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700 mb-3 gap-1 shadow-xs">
+                        <button
+                          type="button"
+                          onClick={() => setModelCategoryTab('flash')}
+                          className={cn(
+                            "py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer border",
+                            modelCategoryTab === 'flash'
+                              ? "bg-white dark:bg-slate-900 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800 shadow-sm"
+                              : "text-slate-600 dark:text-slate-400 border-transparent hover:text-slate-900 dark:hover:text-white"
+                          )}
+                        >
+                          <Zap className="w-4 h-4 text-amber-500 shrink-0" />
+                          <span>Modèles Flash</span>
+                          <span className="px-1.5 py-0.2 text-[10px] bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 rounded-full font-extrabold">⚡ Rapidité</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setModelCategoryTab('pro')}
+                          className={cn(
+                            "py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer border",
+                            modelCategoryTab === 'pro'
+                              ? "bg-white dark:bg-slate-900 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800 shadow-sm"
+                              : "text-slate-600 dark:text-slate-400 border-transparent hover:text-slate-900 dark:hover:text-white"
+                          )}
+                        >
+                          <Brain className="w-4 h-4 text-purple-500 shrink-0" />
+                          <span>Modèles Pro</span>
+                          <span className="px-1.5 py-0.2 text-[10px] bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 rounded-full font-extrabold">🧠 Raisonnement</span>
+                        </button>
+                      </div>
+
+                      {/* Sous-classement Flash */}
+                      {modelCategoryTab === 'flash' && (
+                        <div className="space-y-2 mb-3">
+                          <div className="p-2.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-xs text-amber-900 dark:text-amber-300 flex items-center gap-2">
+                            <Zap className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                            <span><strong>Gamme Flash :</strong> Réponses instantanées, latence minime, optimisé pour les QCM en direct et les Flashcards.</span>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-2">
+                            {[
+                              { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', desc: 'Dernier modèle rapide, recommandé pour la réactivité', badge: 'Recommandé ⚡' },
+                              { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', desc: 'Très rapide, équilibré & faible consommation', badge: 'Populaire' },
+                              { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', desc: 'Performant, polyvalent & réponses courtes', badge: 'Standard' },
+                              { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', desc: 'Ultra-rapide, génération instantanée', badge: 'Ultra-Rapide' },
+                              { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash Preview', desc: 'Aperçu de la nouvelle génération Flash', badge: 'Preview' },
+                              { id: 'gemini-flash', name: 'Gemini Flash (Alias)', desc: 'Redirection automatique vers la dernière version Flash stable', badge: 'Alias Auto' },
+                            ].map((m) => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => {
+                                  saveLlmSettings('api', localLlmUrl, userApiKey, m.id);
+                                  setCustomModelInput('');
+                                }}
+                                className={cn(
+                                  "flex items-center justify-between p-3 rounded-xl border text-left transition-all cursor-pointer",
+                                  selectedModel === m.id
+                                    ? "border-amber-500 bg-amber-50/80 dark:bg-amber-950/50 text-amber-950 dark:text-amber-100 ring-2 ring-amber-400 font-semibold"
+                                    : "border-slate-200 dark:border-slate-800 hover:border-amber-300 dark:hover:border-amber-800 bg-white dark:bg-slate-800/50 text-slate-700 dark:text-slate-300"
+                                )}
+                              >
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-sm">{m.name}</span>
+                                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200">
+                                      {m.badge}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{m.desc}</div>
+                                </div>
+                                {selectedModel === m.id && (
+                                  <CheckCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 ml-2" />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Sous-classement Pro */}
+                      {modelCategoryTab === 'pro' && (
+                        <div className="space-y-2 mb-3">
+                          <div className="p-2.5 rounded-xl bg-purple-50/80 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-900 text-xs text-purple-900 dark:text-purple-300 flex items-center gap-2">
+                            <Brain className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
+                            <span><strong>Gamme Pro :</strong> Raisonnement logique de pointe, haute précision juridique, idéal pour les fiches thématiques et l'analyse complexe.</span>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-2">
+                            {[
+                              { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview', desc: 'Raisonnement de pointe, réflexion logique profonde', badge: 'Recommandé 🧠' },
+                              { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', desc: 'Haute précision & analyse complexe de traités de l\'UE', badge: 'Haute Précision' },
+                              { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro', desc: 'Grand contexte étendu (jusqu\'à 2M de tokens de cours)', badge: 'Contexte 2M' },
+                              { id: 'gemini-pro', name: 'Gemini Pro (Alias)', desc: 'Redirection automatique vers la dernière version Pro stable', badge: 'Alias Auto' },
+                            ].map((m) => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => {
+                                  saveLlmSettings('api', localLlmUrl, userApiKey, m.id);
+                                  setCustomModelInput('');
+                                }}
+                                className={cn(
+                                  "flex items-center justify-between p-3 rounded-xl border text-left transition-all cursor-pointer",
+                                  selectedModel === m.id
+                                    ? "border-purple-500 bg-purple-50/80 dark:bg-purple-950/50 text-purple-950 dark:text-purple-100 ring-2 ring-purple-400 font-semibold"
+                                    : "border-slate-200 dark:border-slate-800 hover:border-purple-300 dark:hover:border-purple-800 bg-white dark:bg-slate-800/50 text-slate-700 dark:text-slate-300"
+                                )}
+                              >
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-sm">{m.name}</span>
+                                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200">
+                                      {m.badge}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{m.desc}</div>
+                                </div>
+                                {selectedModel === m.id && (
+                                  <CheckCircle className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 ml-2" />
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Modèle personnalisé */}
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                          Ou saisir le nom exact d'un autre modèle :
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={customModelInput || (!['gemini-3.6-flash', 'gemini-3.1-pro-preview', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-3-flash-preview', 'gemini-flash', 'gemini-pro'].includes(selectedModel) ? selectedModel : '')}
+                            onChange={(e) => {
+                              setCustomModelInput(e.target.value);
+                              if (e.target.value.trim()) {
+                                saveLlmSettings('api', localLlmUrl, userApiKey, e.target.value.trim());
+                              }
+                            }}
+                            placeholder="ex: gemini-2.0-flash-thinking-exp"
+                            className="flex-1 px-3 py-2 text-xs border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {llmMode === 'local' && (
-                  <div>
-                    <label htmlFor="localUrl" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
-                      Local LLM URL (OpenAI Compatible)
+                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <label htmlFor="localUrl" className="block text-sm font-semibold text-slate-900 dark:text-white mb-2">
+                      URL LLM Local (Compatible OpenAI)
                     </label>
                     <input
                       type="text"
                       id="localUrl"
                       value={localLlmUrl}
-                      onChange={(e) => saveLlmSettings('local', e.target.value)}
-                      className="w-full px-4 py-2 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                      onChange={(e) => saveLlmSettings('local', e.target.value, userApiKey, selectedModel)}
+                      className="w-full px-4 py-2.5 border border-slate-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
                       placeholder="http://localhost:11434/v1/chat/completions"
                     />
                     <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                      Ensure your local LLM server is running and supports CORS. For Ollama, use the v1/chat/completions endpoint.
+                      Assurez-vous que votre serveur local (Ollama, LM Studio...) fonctionne et autorise CORS.
                     </p>
                   </div>
                 )}
+
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowSettings(false);
+                      refreshStorageEstimate();
+                      setIsDbArchitectureModalOpen(true);
+                    }}
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-2 text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-100 dark:hover:bg-indigo-900 border border-indigo-200 dark:border-indigo-800 rounded-xl transition-all cursor-pointer"
+                  >
+                    <Database className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <span>Architecture Base de Données</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowSettings(false)}
+                    className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-sm rounded-xl transition-colors shadow-sm cursor-pointer"
+                  >
+                    Enregistrer & Fermer
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Architecture Base de Données (IndexedDB & Notions) */}
+        {isDbArchitectureModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+              {/* Header Modal */}
+              <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 rounded-2xl">
+                    <Database className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-extrabold text-slate-900 dark:text-white">Architecture Base de Données</h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Stockage haute performance IndexedDB & Moteur d'indexation de Notions</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsDbArchitectureModalOpen(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Status Banner */}
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white shadow-md mb-6 relative overflow-hidden">
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                      <span className="text-xs font-bold uppercase tracking-wider text-indigo-200">Stockage Local Unifié (IndexedDB)</span>
+                    </div>
+                    <h3 className="text-lg font-bold">Capacité Illimitée pour des Milliers de Notions</h3>
+                    <p className="text-xs text-indigo-200/90 mt-1">Vos fiches, QCMs, cours PDF et cartes mémoires sont indexés localement sans alourdir ni ralentir l'application.</p>
+                  </div>
+
+                  <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-xl border border-white/15 text-center shrink-0">
+                    <div className="text-xs text-indigo-200 font-medium">Espace Consommé</div>
+                    <div className="text-xl font-extrabold text-white">{dbStorageEstimate?.usageMB || '0'} MB</div>
+                    <div className="text-[10px] text-indigo-300">sur ~{dbStorageEstimate?.quotaGB || '---'} GB disponibles</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stores / Tables Breakdown */}
+              <div className="mb-6">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                  <HardDrive className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  Tables & Stores de la Base de Données
+                </h3>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80">
+                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Documents Sources</div>
+                    <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">{libraryDocuments.length}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Fichiers PDF / DOCX</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80">
+                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Base de QCMs</div>
+                    <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">{savedQuizzes.length}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Séries de questions</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80">
+                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Fiches Thématiques</div>
+                    <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">{savedFactSheets.length}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Synthèses de notions</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80">
+                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Flashcard Decks</div>
+                    <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">{savedFlashcards.length}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Jeux de mémorisation</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80">
+                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Analyses RAG</div>
+                    <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">{savedDocAnalyses.length}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Rapports détaillés</div>
+                  </div>
+
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80">
+                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Arborescence Notions</div>
+                    <div className="text-xl font-extrabold text-slate-900 dark:text-white mt-1">{libraryFolders.length}</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Dossiers organisés</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notions Index Breakdown */}
+              <div className="mb-6 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <FolderTree className="w-4 h-4 text-indigo-500" />
+                    Indexation Automatique des Notions
+                  </h3>
+                  <span className="text-[11px] text-slate-500">Moteur de recherche rapide activé</span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+                  Toutes vos fiches de cours, QCMs et documents sont organisés par thématiques d'examen EPSO AD5 pour un chargement instantané.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {FACT_SHEET_TOPICS.map((topic) => {
+                    const count = savedFactSheets.filter(f => f.topic === topic.id).length;
+                    return (
+                      <span
+                        key={topic.id}
+                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 shadow-2xs"
+                      >
+                        <span>{topic.label || topic.id}</span>
+                        <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                          {count}
+                        </span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Backup & Import Actions */}
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={handleExportDatabase}
+                    className="flex-1 sm:flex-initial px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Exporter la DB (JSON)</span>
+                  </button>
+
+                  <label className="flex-1 sm:flex-initial px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold rounded-xl transition-all border border-slate-300 dark:border-slate-700 flex items-center justify-center gap-2 cursor-pointer">
+                    <UploadCloud className="w-4 h-4 text-indigo-500" />
+                    <span>Importer DB (JSON)</span>
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleImportDatabase}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      refreshStorageEstimate();
+                      setLibraryNotification("🔄 Index de la base de données rafraîchi avec succès !");
+                    }}
+                    className="px-3 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Re-indexer la base de données"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Re-indexer</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsDbArchitectureModalOpen(false)}
+                    className="px-5 py-2.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 font-bold text-xs rounded-xl hover:opacity-90 transition-all cursor-pointer"
+                  >
+                    Fermer
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -2234,7 +3334,7 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                     onChange={(e) => setDocProcessingType(e.target.value as any)}
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 dark:focus:border-indigo-400 font-medium text-slate-700 dark:text-slate-300"
                   >
-                    <option value="document_analysis">⚡ Analyse Complète du Document (Synthèse, Chiffres, Acteurs)</option>
+                    <option value="document_analysis">Analyse Complète du Document (Synthèse, Chiffres, Acteurs)</option>
                     <option value="qcm">QCM (Questions à choix multiples)</option>
                     <option value="fact_sheet_general">Fiche de révision (Général/Concepts clés)</option>
                     <option value="fact_sheet_institutions">Fiche thématique: Institutions et Organes de l'UE</option>
@@ -2277,25 +3377,40 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
           </div>
         )}
         {appState === 'UPLOAD' && (
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-5xl mx-auto">
             <div className="text-center mb-10">
-              <span className="inline-block py-1 px-3 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 text-sm font-semibold tracking-wider mb-4">
-                CONCOURS ADMINISTRATEUR
+              <span className="inline-block py-1 px-4 rounded-full bg-[#76a9c5]/15 text-[#003e54] dark:bg-[#2f647e]/30 dark:text-[#9acdeb] text-xs font-bold tracking-widest uppercase border border-[#2f647e]/20 mb-4 shadow-2xs">
+                Concours Administrateur EPSO AD5
               </span>
-              <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-4xl mb-4">
-                Préparation aux épreuves EPSO AD5
+              <h2 className="text-3xl font-serif font-normal tracking-tight text-[#191c1f] dark:text-white sm:text-4xl lg:text-5xl mb-4 leading-tight">
+                Préparation Épreuves AD5
               </h2>
-              <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-                Générez des tests d'entraînement type EPSO (Raisonnement cognitif, Connaissance de l'UE, DigComp) à partir de vos documents de révision.
+              <p className="text-base sm:text-lg text-[#41484c] dark:text-slate-300 max-w-2xl mx-auto leading-relaxed">
+                Entraînez-vous sur les épreuves clés (Raisonnement cognitif, Connaissance de l'UE, DigComp, Anglais) avec fiches synthétiques et générateur IA sur vos documents.
               </p>
             </div>
 
-            <div className="flex border-b border-slate-200 dark:border-slate-800 mb-8 overflow-x-auto hide-scrollbar">
-              <button onClick={() => setActiveTab('dashboard')} className={`px-6 py-4 font-semibold text-sm whitespace-nowrap border-b-2 transition-colors ${activeTab === 'dashboard' ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}>Accueil</button>
-              <button onClick={() => setActiveTab('qcm')} className={`px-6 py-4 font-semibold text-sm whitespace-nowrap border-b-2 transition-colors ${activeTab === 'qcm' ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}>QCM EPSO AD5</button>
-              <button onClick={() => setActiveTab('english')} className={`px-6 py-4 font-semibold text-sm whitespace-nowrap border-b-2 transition-colors ${activeTab === 'english' ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}>Programme d'Anglais</button>
-              <button onClick={() => setActiveTab('fact_sheets')} className={`px-6 py-4 font-semibold text-sm whitespace-nowrap border-b-2 transition-colors ${activeTab === 'fact_sheets' ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}>Fiches Thématiques</button>
-              <button onClick={() => setActiveTab('library')} className={`px-6 py-4 font-semibold text-sm whitespace-nowrap border-b-2 transition-colors ${activeTab === 'library' ? 'border-blue-600 text-blue-600 dark:text-blue-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'}`}>Bibliothèque</button>
+            <div className="flex items-center justify-center max-w-3xl mx-auto bg-[#eceef1] dark:bg-slate-900/90 p-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 mb-8 overflow-x-auto hide-scrollbar gap-1.5 shadow-2xs">
+              {[
+                { id: 'dashboard', label: 'Accueil' },
+                { id: 'qcm', label: 'QCM EPSO AD5' },
+                { id: 'english', label: "Programme d'Anglais" },
+                { id: 'fact_sheets', label: 'Fiches Thématiques' },
+                { id: 'library', label: 'Bibliothèque' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={cn(
+                    "flex-1 sm:flex-initial text-center justify-center px-5 py-2.5 text-xs font-bold whitespace-nowrap rounded-xl transition-all cursor-pointer border tracking-wide",
+                    activeTab === tab.id
+                      ? "bg-white dark:bg-slate-800 text-[#2f647e] dark:text-[#76a9c5] border-[#2f647e]/30 dark:border-slate-700 shadow-sm font-extrabold"
+                      : "text-[#41484c] dark:text-slate-400 border-transparent hover:text-[#191c1f] dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/50"
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
             <div className="mb-12">
@@ -2480,7 +3595,7 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
 
                               {qcmSourceMode === 'all_docs' && (
                                 <div className="bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
-                                  📚 Toute la base ({libraryDocuments.length} documents)
+                                  Toute la base ({libraryDocuments.length} documents)
                                 </div>
                               )}
 
@@ -2502,7 +3617,7 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                                   className="bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-900 dark:text-white px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
                                 >
                                   {libraryDocuments.map(doc => (
-                                    <option key={doc.id} value={doc.id}>📄 {doc.name}</option>
+                                    <option key={doc.id} value={doc.id}>{doc.name}</option>
                                   ))}
                                 </select>
                               )}
@@ -2539,13 +3654,13 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                         ) : (
                           <div className="mt-3 pt-3 border-t border-emerald-200/60 dark:border-emerald-800/40 text-xs text-emerald-800 dark:text-emerald-300 font-medium">
                             {qcmSourceMode === 'all_docs' && (
-                              <span>💡 Extractions RAG : <strong>Questions générées sur l'ensemble de vos {libraryDocuments.length} document(s)</strong>.</span>
+                              <span>Extractions RAG : <strong>Questions générées sur l'ensemble de vos {libraryDocuments.length} document(s)</strong>.</span>
                             )}
                             {qcmSourceMode === 'folder' && (
-                              <span>💡 Extractions RAG : <strong>Questions générées à partir du dossier "{libraryFolders.find(f => f.id === qcmSourceFolderId)?.name || 'sélectionné'}"</strong>.</span>
+                              <span>Extractions RAG : <strong>Questions générées à partir du dossier "{libraryFolders.find(f => f.id === qcmSourceFolderId)?.name || 'sélectionné'}"</strong>.</span>
                             )}
                             {qcmSourceMode === 'single_doc' && (
-                              <span>💡 Extractions RAG : <strong>Questions générées uniquement depuis "{libraryDocuments.find(d => d.id === selectedEuDocId)?.name}"</strong>.</span>
+                              <span>Extractions RAG : <strong>Questions générées uniquement depuis "{libraryDocuments.find(d => d.id === selectedEuDocId)?.name}"</strong>.</span>
                             )}
                           </div>
                         )}
@@ -3032,30 +4147,46 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                   </div>
 
                   {/* Primary Section Switcher */}
-                  <div className="flex border-b border-slate-200 dark:border-slate-800 mb-8 bg-slate-100/60 dark:bg-slate-900/60 p-1.5 rounded-2xl gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 p-1.5 bg-slate-200/80 dark:bg-slate-800/90 rounded-2xl border border-slate-300 dark:border-slate-700/80 mb-8 gap-2 shadow-xs">
                     <button
                       onClick={() => setLibrarySection('documents')}
                       className={cn(
-                        "flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2",
+                        "py-3.5 px-5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2.5 cursor-pointer border",
                         librarySection === 'documents'
-                          ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm"
-                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                          ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 border-slate-300 dark:border-slate-700 shadow-md ring-1 ring-slate-200 dark:ring-slate-800"
+                          : "text-slate-700 dark:text-slate-300 border-transparent hover:bg-slate-300/60 dark:hover:bg-slate-700/60"
                       )}
                     >
-                      <FileText className="w-4 h-4" />
-                      Documents Source ({libraryDocuments.length})
+                      <FileText className="w-4.5 h-4.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                      <span>Documents Source</span>
+                      <span className={cn(
+                        "px-2.5 py-0.5 rounded-full text-xs font-extrabold border ml-1",
+                        librarySection === 'documents'
+                          ? "bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-200 border-indigo-300 dark:border-indigo-800"
+                          : "bg-slate-300 dark:bg-slate-700 text-slate-800 dark:text-slate-200 border-slate-400 dark:border-slate-600"
+                      )}>
+                        {libraryDocuments.length}
+                      </span>
                     </button>
                     <button
                       onClick={() => setLibrarySection('generated')}
                       className={cn(
-                        "flex-1 py-3 px-4 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2",
+                        "py-3.5 px-5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2.5 cursor-pointer border",
                         librarySection === 'generated'
-                          ? "bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm"
-                          : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
+                          ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 border-slate-300 dark:border-slate-700 shadow-md ring-1 ring-slate-200 dark:ring-slate-800"
+                          : "text-slate-700 dark:text-slate-300 border-transparent hover:bg-slate-300/60 dark:hover:bg-slate-700/60"
                       )}
                     >
-                      <BrainCircuit className="w-4 h-4" />
-                      Contenus & Questions Générés ({savedQuizzes.length + savedDocAnalyses.length + savedFactSheets.length + savedFlashcards.length})
+                      <BrainCircuit className="w-4.5 h-4.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                      <span>Contenus & Questions Générés</span>
+                      <span className={cn(
+                        "px-2.5 py-0.5 rounded-full text-xs font-extrabold border ml-1",
+                        librarySection === 'generated'
+                          ? "bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-200 border-indigo-300 dark:border-indigo-800"
+                          : "bg-slate-300 dark:bg-slate-700 text-slate-800 dark:text-slate-200 border-slate-400 dark:border-slate-600"
+                      )}>
+                        {savedQuizzes.length + savedDocAnalyses.length + savedFactSheets.length + savedFlashcards.length}
+                      </span>
                     </button>
                   </div>
 
@@ -3066,12 +4197,14 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                       {libraryNotification && (
                         <div className="mb-4 p-3 bg-emerald-50 dark:bg-emerald-950/80 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 rounded-2xl text-xs font-bold flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2">
                           <span>{libraryNotification}</span>
-                          <button onClick={() => setLibraryNotification(null)} className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-100 p-1">✕</button>
+                          <button onClick={() => setLibraryNotification(null)} className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-900 dark:hover:text-emerald-100 p-1 cursor-pointer">
+                            <X className="w-4 h-4" />
+                          </button>
                         </div>
                       )}
 
                       {/* Folder Toolbar & Breadcrumbs with Drop Targets */}
-                      <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="bg-slate-100/90 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700/90 rounded-2xl p-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                         {/* Breadcrumbs */}
                         <div className="flex items-center flex-wrap gap-1.5 text-sm font-semibold">
                           <button
@@ -3086,16 +4219,16 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                               setDraggedDocId(null);
                             }}
                             className={cn(
-                              "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer",
+                              "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer border",
                               currentFolderId === null
-                                ? "bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold shadow-xs"
-                                : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700",
+                                ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800 font-bold shadow-xs"
+                                : "text-slate-700 dark:text-slate-300 border-transparent hover:bg-slate-200 dark:hover:bg-slate-700",
                               dragOverFolderId === 'root' && "ring-2 ring-emerald-500 bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 scale-105"
                             )}
                           >
-                            <Home className="w-4 h-4" />
+                            <Home className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                             <span>Racine</span>
-                            {dragOverFolderId === 'root' && <span className="text-[10px] ml-1 font-extrabold text-emerald-600 dark:text-emerald-400">📥 Déposer ici</span>}
+                            {dragOverFolderId === 'root' && <span className="text-[10px] ml-1 font-extrabold text-emerald-600 dark:text-emerald-400">Déposer ici</span>}
                           </button>
 
                           {getFolderPathBreadcrumbs(currentFolderId).map((f) => (
@@ -3113,16 +4246,16 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                                   setDraggedDocId(null);
                                 }}
                                 className={cn(
-                                  "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer",
+                                  "flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer border",
                                   f.id === currentFolderId
-                                    ? "bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold shadow-xs"
-                                    : "text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700",
+                                    ? "bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800 font-bold shadow-xs"
+                                    : "text-slate-700 dark:text-slate-300 border-transparent hover:bg-slate-200 dark:hover:bg-slate-700",
                                   dragOverFolderId === f.id && "ring-2 ring-indigo-500 bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-200 scale-105"
                                 )}
                               >
                                 <Folder className="w-4 h-4 text-indigo-500" />
                                 <span>{f.name}</span>
-                                {dragOverFolderId === f.id && <span className="text-[10px] ml-1 font-extrabold text-indigo-600 dark:text-indigo-400">📥 Déposer ici</span>}
+                                {dragOverFolderId === f.id && <span className="text-[10px] ml-1 font-extrabold text-indigo-600 dark:text-indigo-400">Déposer ici</span>}
                               </button>
                             </React.Fragment>
                           ))}
@@ -3152,9 +4285,9 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                               </h4>
                               <button
                                 onClick={() => setIsCreateFolderModalOpen(false)}
-                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-1"
                               >
-                                ✕
+                                <X className="w-4 h-4" />
                               </button>
                             </div>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
@@ -3207,9 +4340,9 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                               </div>
                               <button
                                 onClick={() => setMoveModalDocIds(null)}
-                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1"
+                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
                               >
-                                ✕
+                                <X className="w-4 h-4" />
                               </button>
                             </div>
 
@@ -3319,7 +4452,7 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                                         </p>
                                         {dragOverFolderId === folder.id && (
                                           <span className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 animate-pulse">
-                                            📥 Glisser ici
+                                            Glisser ici
                                           </span>
                                         )}
                                       </div>
@@ -3510,7 +4643,7 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                                         }}
                                         className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-200 py-1.5 px-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer truncate"
                                       >
-                                        <option value="root">📁 Racine (Aucun dossier)</option>
+                                        <option value="root">Racine (Aucun dossier)</option>
                                         {renderFolderSelectOptions(null, 0)}
                                       </select>
                                     </div>
@@ -3557,67 +4690,85 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                   {/* SECTION 2: CONTENUS & QUESTIONS GÉNÉRÉS */}
                   {librarySection === 'generated' && (
                     <div>
-                      {/* Filter sub-tabs */}
-                      <div className="flex items-center gap-2 mb-6 overflow-x-auto pb-2 hide-scrollbar">
-                        <button
-                          onClick={() => setGeneratedFilter('all')}
-                          className={cn(
-                            "px-4 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap",
-                            generatedFilter === 'all'
-                              ? "bg-indigo-600 text-white shadow-sm"
-                              : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-                          )}
-                        >
-                          Tous ({savedQuizzes.length + savedDocAnalyses.length + savedFactSheets.length + savedFlashcards.length})
-                        </button>
-                        <button
-                          onClick={() => setGeneratedFilter('quizzes')}
-                          className={cn(
-                            "px-4 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5",
-                            generatedFilter === 'quizzes'
-                              ? "bg-blue-600 text-white shadow-sm"
-                              : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-                          )}
-                        >
-                          <Award className="w-3.5 h-3.5" />
-                          QCM & Questions ({savedQuizzes.length})
-                        </button>
-                        <button
-                          onClick={() => setGeneratedFilter('analyses')}
-                          className={cn(
-                            "px-4 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5",
-                            generatedFilter === 'analyses'
-                              ? "bg-amber-600 text-white shadow-sm"
-                              : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-                          )}
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          Analyses RAG ({savedDocAnalyses.length})
-                        </button>
-                        <button
-                          onClick={() => setGeneratedFilter('fact_sheets')}
-                          className={cn(
-                            "px-4 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5",
-                            generatedFilter === 'fact_sheets'
-                              ? "bg-emerald-600 text-white shadow-sm"
-                              : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-                          )}
-                        >
-                          <BookOpenCheck className="w-3.5 h-3.5" />
-                          Fiches de Révision ({savedFactSheets.length})
-                        </button>
-                        <button
-                          onClick={() => setGeneratedFilter('flashcards')}
-                          className={cn(
-                            "px-4 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5",
-                            generatedFilter === 'flashcards'
-                              ? "bg-indigo-600 text-white shadow-sm"
-                              : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
-                          )}
-                        >
-                          <Layers className="w-3.5 h-3.5" />
-                          Flashcards ({savedFlashcards.length})
-                        </button>
+                      {/* Filter Bar with Category Pills & Folder Selector */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                        {/* Category Pills */}
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1 hide-scrollbar">
+                          <button
+                            onClick={() => setGeneratedFilter('all')}
+                            className={cn(
+                              "px-4 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap",
+                              generatedFilter === 'all'
+                                ? "bg-indigo-600 text-white shadow-sm"
+                                : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                            )}
+                          >
+                            Tous ({savedQuizzes.length + savedDocAnalyses.length + savedFactSheets.length + savedFlashcards.length})
+                          </button>
+                          <button
+                            onClick={() => setGeneratedFilter('quizzes')}
+                            className={cn(
+                              "px-4 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5",
+                              generatedFilter === 'quizzes'
+                                ? "bg-blue-600 text-white shadow-sm"
+                                : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                            )}
+                          >
+                            <Award className="w-3.5 h-3.5" />
+                            QCM & Questions ({savedQuizzes.length})
+                          </button>
+                          <button
+                            onClick={() => setGeneratedFilter('analyses')}
+                            className={cn(
+                              "px-4 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5",
+                              generatedFilter === 'analyses'
+                                ? "bg-amber-600 text-white shadow-sm"
+                                : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                            )}
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Analyses RAG ({savedDocAnalyses.length})
+                          </button>
+                          <button
+                            onClick={() => setGeneratedFilter('fact_sheets')}
+                            className={cn(
+                              "px-4 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5",
+                              generatedFilter === 'fact_sheets'
+                                ? "bg-emerald-600 text-white shadow-sm"
+                                : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                            )}
+                          >
+                            <BookOpenCheck className="w-3.5 h-3.5" />
+                            Fiches de Révision ({savedFactSheets.length})
+                          </button>
+                          <button
+                            onClick={() => setGeneratedFilter('flashcards')}
+                            className={cn(
+                              "px-4 py-2 rounded-xl text-xs font-bold transition-colors whitespace-nowrap flex items-center gap-1.5",
+                              generatedFilter === 'flashcards'
+                                ? "bg-indigo-600 text-white shadow-sm"
+                                : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                            )}
+                          >
+                            <Layers className="w-3.5 h-3.5" />
+                            Flashcards ({savedFlashcards.length})
+                          </button>
+                        </div>
+
+                        {/* Folder Filter Selector */}
+                        <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-1.5 rounded-xl shadow-xs">
+                          <Folder className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300 hidden sm:inline">Dossier :</span>
+                          <select
+                            value={generatedFolderFilter}
+                            onChange={(e) => setGeneratedFolderFilter(e.target.value)}
+                            className="bg-transparent border-0 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer pr-2"
+                          >
+                            <option value="all">Tous les dossiers</option>
+                            <option value="root">Racine (Aucun dossier)</option>
+                            {renderFolderSelectOptions(null, 0)}
+                          </select>
+                        </div>
                       </div>
 
                       {/* Empty state if nothing generated */}
@@ -3632,7 +4783,7 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                           </p>
                           <button
                             onClick={() => setActiveTab('qcm')}
-                            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-colors shadow-sm text-sm"
+                            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-colors shadow-sm text-sm cursor-pointer"
                           >
                             <Calculator className="w-4 h-4" />
                             Générer mon premier QCM
@@ -3646,33 +4797,33 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                                 <div className="flex items-center gap-2">
                                   <Award className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                                  <h4 className="text-lg font-bold text-slate-900 dark:text-white">QCM & Questions Générés ({savedQuizzes.filter(q => matchesQcmSubFilter(q, qcmSubFilter)).length})</h4>
+                                  <h4 className="text-lg font-bold text-slate-900 dark:text-white">QCM & Questions Générés ({savedQuizzes.filter(q => matchesQcmSubFilter(q, qcmSubFilter) && matchesGeneratedFolderFilter(q.folderId)).length})</h4>
                                 </div>
 
                                 {/* QCM Sub-Filter Bar */}
                                 <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar pb-1">
                                   {[
                                     { id: 'all', label: 'Tous' },
-                                    { id: 'eu_all_knowledge', label: '🌟 Toute Connaissance' },
-                                    { id: 'eu_dates', label: '📅 Dates' },
-                                    { id: 'eu_institutions', label: '🏛️ Institutions' },
-                                    { id: 'eu_policies', label: '🌍 Politiques' },
-                                    { id: 'eu_history', label: '📜 Histoire' },
-                                    { id: 'eu_treaties', label: '⚖️ Traités' },
-                                    { id: 'eu_figures', label: '📊 Chiffres' },
-                                    { id: 'numerical', label: '🔢 Numérique' },
-                                    { id: 'verbal', label: '📝 Verbal' },
-                                    { id: 'digcomp', label: '💻 DigComp' },
-                                    { id: 'english', label: '🇬🇧 Anglais' }
+                                    { id: 'eu_all_knowledge', label: 'Toute Connaissance' },
+                                    { id: 'eu_dates', label: 'Dates' },
+                                    { id: 'eu_institutions', label: 'Institutions' },
+                                    { id: 'eu_policies', label: 'Politiques' },
+                                    { id: 'eu_history', label: 'Histoire' },
+                                    { id: 'eu_treaties', label: 'Traités' },
+                                    { id: 'eu_figures', label: 'Chiffres' },
+                                    { id: 'numerical', label: 'Numérique' },
+                                    { id: 'verbal', label: 'Verbal' },
+                                    { id: 'digcomp', label: 'DigComp' },
+                                    { id: 'english', label: 'Anglais' }
                                   ].map(f => (
                                     <button
                                       key={f.id}
                                       onClick={() => setQcmSubFilter(f.id)}
                                       className={cn(
-                                        "px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap",
+                                        "px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer border",
                                         qcmSubFilter === f.id
-                                          ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xs"
-                                          : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                                          ? "bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-slate-900 dark:border-white shadow-xs"
+                                          : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
                                       )}
                                     >
                                       {f.label}
@@ -3683,7 +4834,7 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
 
                               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {savedQuizzes
-                                  .filter(q => q.title.toLowerCase().includes(librarySearchQuery.toLowerCase()) && matchesQcmSubFilter(q, qcmSubFilter))
+                                  .filter(q => q.title.toLowerCase().includes(librarySearchQuery.toLowerCase()) && matchesQcmSubFilter(q, qcmSubFilter) && matchesGeneratedFolderFilter(q.folderId))
                                   .map(quiz => (
                                     <div key={quiz.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm hover:shadow-md transition-shadow group flex flex-col">
                                       <div className="flex items-start justify-between mb-3 gap-2">
@@ -3692,14 +4843,34 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                                             <Award className="w-4 h-4" />
                                           </div>
                                           {getQuizCategoryBadge(quiz)}
+                                          {quiz.folderName ? (
+                                            <span className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shrink-0">
+                                              <Folder className="w-3 h-3 text-indigo-500" />
+                                              {quiz.folderName}
+                                            </span>
+                                          ) : (
+                                            <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 shrink-0">
+                                              <Home className="w-3 h-3 text-slate-400" />
+                                              Racine
+                                            </span>
+                                          )}
                                         </div>
-                                        <button 
-                                          onClick={(e) => deleteQuiz(quiz.id, e)}
-                                          className="text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1"
-                                          title="Supprimer ce QCM"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={() => setMoveModalResource({ type: 'quiz', id: quiz.id, title: quiz.title })}
+                                            className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors opacity-0 group-hover:opacity-100 p-1 cursor-pointer"
+                                            title="Déplacer dans un dossier"
+                                          >
+                                            <FolderInput className="w-4 h-4" />
+                                          </button>
+                                          <button 
+                                            onClick={(e) => deleteQuiz(quiz.id, e)}
+                                            className="text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1 cursor-pointer"
+                                            title="Supprimer ce QCM"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </div>
                                       </div>
                                       
                                       <h5 className="font-bold text-slate-900 dark:text-white mb-1 line-clamp-2 text-base" title={quiz.title}>
@@ -3713,7 +4884,7 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                                         {quiz.docName && (
                                           <>
                                             <span>•</span>
-                                            <span className="truncate max-w-[120px]" title={quiz.docName}>📄 {quiz.docName}</span>
+                                            <span className="truncate max-w-[120px]" title={quiz.docName}>{quiz.docName}</span>
                                           </>
                                         )}
                                       </div>
@@ -3721,14 +4892,14 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                                       <div className="mt-auto pt-4 border-t border-slate-100 dark:border-slate-800 flex gap-2">
                                         <button
                                           onClick={() => setViewingQuizModal(quiz)}
-                                          className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1"
+                                          className="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
                                         >
                                           <Eye className="w-3.5 h-3.5" />
                                           Questions
                                         </button>
                                         <button
                                           onClick={() => loadQuiz(quiz)}
-                                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1 shadow-sm"
+                                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1 shadow-sm cursor-pointer"
                                         >
                                           <Award className="w-3.5 h-3.5" />
                                           Lancer QCM
@@ -3745,24 +4916,46 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                             <div>
                               <div className="flex items-center gap-2 mb-4">
                                 <Sparkles className="w-5 h-5 text-amber-500" />
-                                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Analyses RAG de Documents ({savedDocAnalyses.length})</h4>
+                                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Analyses RAG de Documents ({savedDocAnalyses.filter(a => matchesGeneratedFolderFilter(a.folderId)).length})</h4>
                               </div>
                               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {savedDocAnalyses
-                                  .filter(a => a.docName.toLowerCase().includes(librarySearchQuery.toLowerCase()))
+                                  .filter(a => a.docName.toLowerCase().includes(librarySearchQuery.toLowerCase()) && matchesGeneratedFolderFilter(a.folderId))
                                   .map(analysis => (
                                     <div key={analysis.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm hover:shadow-md transition-shadow group flex flex-col">
-                                      <div className="flex items-start justify-between mb-3">
-                                        <div className="w-10 h-10 bg-amber-50 dark:bg-amber-900/30 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
-                                          <Sparkles className="w-5 h-5" />
+                                      <div className="flex items-start justify-between mb-3 gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <div className="w-10 h-10 bg-amber-50 dark:bg-amber-900/30 rounded-xl flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                                            <Sparkles className="w-5 h-5" />
+                                          </div>
+                                          {analysis.folderName ? (
+                                            <span className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shrink-0">
+                                              <Folder className="w-3 h-3 text-indigo-500" />
+                                              {analysis.folderName}
+                                            </span>
+                                          ) : (
+                                            <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 shrink-0">
+                                              <Home className="w-3 h-3 text-slate-400" />
+                                              Racine
+                                            </span>
+                                          )}
                                         </div>
-                                        <button 
-                                          onClick={() => setSavedDocAnalyses(prev => prev.filter(a => a.id !== analysis.id))}
-                                          className="text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1"
-                                          title="Supprimer"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={() => setMoveModalResource({ type: 'analysis', id: analysis.id, title: analysis.docName })}
+                                            className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors opacity-0 group-hover:opacity-100 p-1 cursor-pointer"
+                                            title="Déplacer dans un dossier"
+                                          >
+                                            <FolderInput className="w-4 h-4" />
+                                          </button>
+                                          <button 
+                                            onClick={() => setSavedDocAnalyses(prev => prev.filter(a => a.id !== analysis.id))}
+                                            className="text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1 cursor-pointer"
+                                            title="Supprimer"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </div>
                                       </div>
                                       
                                       <h5 className="font-bold text-slate-900 dark:text-white mb-1 line-clamp-2 text-base" title={analysis.docName}>
@@ -3781,7 +4974,7 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                                             setDocAnalysisResult(analysis);
                                             setAppState('DOCUMENT_ANALYSIS');
                                           }}
-                                          className="flex-1 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1"
+                                          className="flex-1 bg-amber-50 dark:bg-amber-900/30 hover:bg-amber-100 dark:hover:bg-amber-900/50 text-amber-800 dark:text-amber-300 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
                                         >
                                           <Eye className="w-3.5 h-3.5" />
                                           Consulter l'analyse
@@ -3798,24 +4991,46 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                             <div>
                               <div className="flex items-center gap-2 mb-4">
                                 <BookOpenCheck className="w-5 h-5 text-emerald-500" />
-                                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Fiches de Révision ({savedFactSheets.length})</h4>
+                                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Fiches de Révision ({savedFactSheets.filter(s => matchesGeneratedFolderFilter(s.folderId)).length})</h4>
                               </div>
                               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {savedFactSheets
-                                  .filter(s => s.title.toLowerCase().includes(librarySearchQuery.toLowerCase()))
+                                  .filter(s => s.title.toLowerCase().includes(librarySearchQuery.toLowerCase()) && matchesGeneratedFolderFilter(s.folderId))
                                   .map(sheet => (
                                     <div key={sheet.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm hover:shadow-md transition-shadow group flex flex-col">
-                                      <div className="flex items-start justify-between mb-3">
-                                        <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
-                                          <BookOpenCheck className="w-5 h-5" />
+                                      <div className="flex items-start justify-between mb-3 gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <div className="w-10 h-10 bg-emerald-50 dark:bg-emerald-900/30 rounded-xl flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                                            <BookOpenCheck className="w-5 h-5" />
+                                          </div>
+                                          {sheet.folderName ? (
+                                            <span className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shrink-0">
+                                              <Folder className="w-3 h-3 text-indigo-500" />
+                                              {sheet.folderName}
+                                            </span>
+                                          ) : (
+                                            <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 shrink-0">
+                                              <Home className="w-3 h-3 text-slate-400" />
+                                              Racine
+                                            </span>
+                                          )}
                                         </div>
-                                        <button 
-                                          onClick={() => setSavedFactSheets(prev => prev.filter(s => s.id !== sheet.id))}
-                                          className="text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1"
-                                          title="Supprimer"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={() => setMoveModalResource({ type: 'fact_sheet', id: sheet.id, title: sheet.title })}
+                                            className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors opacity-0 group-hover:opacity-100 p-1 cursor-pointer"
+                                            title="Déplacer dans un dossier"
+                                          >
+                                            <FolderInput className="w-4 h-4" />
+                                          </button>
+                                          <button 
+                                            onClick={() => setSavedFactSheets(prev => prev.filter(s => s.id !== sheet.id))}
+                                            className="text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1 cursor-pointer"
+                                            title="Supprimer"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </div>
                                       </div>
                                       
                                       <h5 className="font-bold text-slate-900 dark:text-white mb-1 line-clamp-2 text-base" title={sheet.title}>
@@ -3834,7 +5049,7 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                                             setFactSheetContent(sheet);
                                             setAppState('FACT_SHEET');
                                           }}
-                                          className="flex-1 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1"
+                                          className="flex-1 bg-emerald-50 dark:bg-emerald-900/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 py-2 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1 cursor-pointer"
                                         >
                                           <Eye className="w-3.5 h-3.5" />
                                           Consulter la fiche
@@ -3851,24 +5066,46 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                             <div>
                               <div className="flex items-center gap-2 mb-4">
                                 <Layers className="w-5 h-5 text-indigo-500" />
-                                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Paquets de Flashcards ({savedFlashcards.length})</h4>
+                                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Paquets de Flashcards ({savedFlashcards.filter(d => matchesGeneratedFolderFilter(d.folderId)).length})</h4>
                               </div>
                               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {savedFlashcards
-                                  .filter(d => d.title.toLowerCase().includes(librarySearchQuery.toLowerCase()))
+                                  .filter(d => d.title.toLowerCase().includes(librarySearchQuery.toLowerCase()) && matchesGeneratedFolderFilter(d.folderId))
                                   .map(deck => (
                                     <div key={deck.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-sm hover:shadow-md transition-shadow group flex flex-col">
-                                      <div className="flex items-start justify-between mb-3">
-                                        <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
-                                          <Layers className="w-5 h-5" />
+                                      <div className="flex items-start justify-between mb-3 gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <div className="w-10 h-10 bg-indigo-50 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                                            <Layers className="w-5 h-5" />
+                                          </div>
+                                          {deck.folderName ? (
+                                            <span className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1 shrink-0">
+                                              <Folder className="w-3 h-3 text-indigo-500" />
+                                              {deck.folderName}
+                                            </span>
+                                          ) : (
+                                            <span className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full text-[10px] font-semibold flex items-center gap-1 shrink-0">
+                                              <Home className="w-3 h-3 text-slate-400" />
+                                              Racine
+                                            </span>
+                                          )}
                                         </div>
-                                        <button 
-                                          onClick={() => setSavedFlashcards(prev => prev.filter(d => d.id !== deck.id))}
-                                          className="text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1"
-                                          title="Supprimer"
-                                        >
-                                          <Trash2 className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                          <button
+                                            onClick={() => setMoveModalResource({ type: 'flashcard', id: deck.id, title: deck.title })}
+                                            className="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors opacity-0 group-hover:opacity-100 p-1 cursor-pointer"
+                                            title="Déplacer dans un dossier"
+                                          >
+                                            <FolderInput className="w-4 h-4" />
+                                          </button>
+                                          <button 
+                                            onClick={() => setSavedFlashcards(prev => prev.filter(d => d.id !== deck.id))}
+                                            className="text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 p-1 cursor-pointer"
+                                            title="Supprimer"
+                                          >
+                                            <Trash2 className="w-4 h-4" />
+                                          </button>
+                                        </div>
                                       </div>
                                       
                                       <h5 className="font-bold text-slate-900 dark:text-white mb-1 line-clamp-2 text-base" title={deck.title}>
@@ -4501,6 +5738,159 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
               </div>
             </div>
 
+            {/* SECTION CENTRALE : ARCHITECTURE DE NOTIONS & DÉCOUPAGE THÉMATIQUE */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 border-2 border-[#2f647e]/30 dark:border-[#2f647e]/50 shadow-md">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 mb-6 border-b border-slate-100 dark:border-slate-800">
+                <div>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold uppercase bg-[#2f647e]/10 text-[#2f647e] dark:bg-[#76a9c5]/20 dark:text-[#9acdeb] mb-2">
+                    <Layers className="w-3.5 h-3.5" />
+                    Architecture Source & Matrice de Notions
+                  </span>
+                  <h2 className="text-2xl font-serif font-bold text-slate-900 dark:text-white">
+                    Découpage Thématique & Notions Clés ({docAnalysisResult.notions?.length || 0})
+                  </h2>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                    Les notions extraites ci-dessous constituent le découpage de référence pour la génération ciblée de vos QCM, Fiches et Flashcards.
+                  </p>
+                </div>
+              </div>
+
+              {/* Modules & Notions */}
+              {docAnalysisResult.modules && docAnalysisResult.modules.length > 0 ? (
+                <div className="space-y-8">
+                  {docAnalysisResult.modules.map((mod, modIdx) => (
+                    <div key={modIdx} className="bg-slate-50/80 dark:bg-slate-800/40 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-700/60">
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="w-8 h-8 rounded-xl bg-[#2f647e] text-white font-extrabold flex items-center justify-center text-sm shrink-0">
+                          M{mod.moduleNumber || (modIdx + 1)}
+                        </span>
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900 dark:text-white">
+                            {mod.title}
+                          </h3>
+                          {mod.description && (
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{mod.description}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4 mt-4">
+                        {mod.notions && mod.notions.length > 0 ? (
+                          mod.notions.map((notion, nIdx) => (
+                            <div key={nIdx} className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs hover:border-[#2f647e]/50 transition-all">
+                              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                <h4 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                  <BookOpen className="w-4 h-4 text-[#2f647e]" />
+                                  {notion.title}
+                                </h4>
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                    {notion.category}
+                                  </span>
+                                  {notion.sourcePage && (
+                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                                      {notion.sourcePage}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <p className="text-xs text-slate-600 dark:text-slate-300 mb-3 leading-relaxed">
+                                {notion.summary}
+                              </p>
+
+                              {notion.keyPoints && notion.keyPoints.length > 0 && (
+                                <ul className="mb-4 space-y-1 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800">
+                                  {notion.keyPoints.map((kp, kpIdx) => (
+                                    <li key={kpIdx} className="text-[11px] text-slate-700 dark:text-slate-300 flex items-start gap-1.5 font-medium">
+                                      <span className="text-[#2f647e] font-bold">•</span>
+                                      <span>{kp}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+
+                              {/* Actions ciblées sur cette notion */}
+                              <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                <button
+                                  onClick={() => generateQuizFromNotion(notion, docAnalysisResult.docName)}
+                                  className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 dark:text-indigo-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                                  title="Générer un QCM ciblé sur cette notion"
+                                >
+                                  <BrainCircuit className="w-3.5 h-3.5" />
+                                  <span>Générer QCM</span>
+                                </button>
+
+                                <button
+                                  onClick={() => generateFactSheetFromNotion(notion, docAnalysisResult.docName)}
+                                  className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 dark:text-emerald-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                                  title="Créer une fiche de révision ciblée"
+                                >
+                                  <FileText className="w-3.5 h-3.5" />
+                                  <span>Fiche de Révision</span>
+                                </button>
+
+                                <button
+                                  onClick={() => generateFlashcardsFromNotion(notion, docAnalysisResult.docName)}
+                                  className="px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:hover:bg-blue-900/80 dark:text-blue-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                                  title="Créer un paquet de flashcards"
+                                >
+                                  <Layers className="w-3.5 h-3.5" />
+                                  <span>Flashcards</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-xs text-slate-400 italic">Aucune notion isolée pour ce module.</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : docAnalysisResult.notions && docAnalysisResult.notions.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {docAnalysisResult.notions.map((notion, nIdx) => (
+                    <div key={nIdx} className="bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xs">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                          <BookOpen className="w-4 h-4 text-[#2f647e]" />
+                          {notion.title}
+                        </h4>
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                          {notion.category}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 mb-3 leading-relaxed">{notion.summary}</p>
+                      
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                        <button
+                          onClick={() => generateQuizFromNotion(notion, docAnalysisResult.docName)}
+                          className="px-2.5 py-1 rounded-md bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300 text-xs font-bold hover:bg-indigo-200 transition-colors"
+                        >
+                          QCM
+                        </button>
+                        <button
+                          onClick={() => generateFactSheetFromNotion(notion, docAnalysisResult.docName)}
+                          className="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300 text-xs font-bold hover:bg-emerald-200 transition-colors"
+                        >
+                          Fiche
+                        </button>
+                        <button
+                          onClick={() => generateFlashcardsFromNotion(notion, docAnalysisResult.docName)}
+                          className="px-2.5 py-1 rounded-md bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300 text-xs font-bold hover:bg-blue-200 transition-colors"
+                        >
+                          Flashcards
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500 italic">Aucune notion extraite.</p>
+              )}
+            </div>
+
             {/* Grid 2 Columns: Takeaways & Key Figures */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Takeaways */}
@@ -4617,6 +6007,53 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
               >
                 Retour
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modal for Moving Generated Resource */}
+        {moveModalResource && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                  <FolderInput className="w-5 h-5" />
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Déplacer la ressource</h3>
+                </div>
+                <button
+                  onClick={() => setMoveModalResource(null)}
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 line-clamp-2">
+                Sélectionnez le dossier de destination pour : <strong className="text-slate-800 dark:text-slate-200">{moveModalResource.title}</strong>
+              </p>
+
+              <div className="max-h-60 overflow-y-auto space-y-1 pr-1 border border-slate-100 dark:border-slate-800 rounded-xl p-2 mb-6">
+                <button
+                  onClick={() => {
+                    moveResourceToFolder(moveModalResource.type, moveModalResource.id, undefined);
+                    setMoveModalResource(null);
+                  }}
+                  className="w-full flex items-center gap-2 p-2 rounded-lg text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                >
+                  <Home className="w-4 h-4 text-slate-400" />
+                  <span>Racine (Aucun dossier)</span>
+                </button>
+                {renderFolderMoveTreeForResource(moveModalResource.type, moveModalResource.id, null, 0)}
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setMoveModalResource(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  Annuler
+                </button>
+              </div>
             </div>
           </div>
         )}

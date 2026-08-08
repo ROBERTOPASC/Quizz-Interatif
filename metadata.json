@@ -1,5 +1,6 @@
 {
-  "name": "QCM Reader & Quizzer",
-  "description": "Upload a PDF or Word document containing Multiple Choice Questions (QCM) and their corrections. The app extracts the questions and lets you take the quiz interactively.",
-  "requestFramePermissions": []
+  "name": "Prépa EPSO AD5 - Horizon",
+  "description": "Plateforme de préparation aux épreuves du concours EPSO AD5 Administrateur (Raisonnement cognitif, Connaissance de l'UE, DigComp) avec fiches thématiques et générateur IA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

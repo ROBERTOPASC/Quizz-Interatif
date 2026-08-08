@@ -180,17 +180,19 @@ export const QCM_SKILLS: Record<string, string> = {
 };
 
 export const DOCUMENT_ANALYSIS_SKILL = `
-# SKILL / COMPÉTENCE : ANALYSE ET SYNTHÈSE DE DOCUMENT EPSO (RAG)
+# SKILL / COMPÉTENCE : ANALYSE ET DÉCOUPAGE EN NOTIONS D'UN DOCUMENT (RAG EPSO)
 ## OBJECTIF
-Extraire la substance fondamentale d'un document ou rapport pour ressortir l'ensemble des informations clés (synthèse exécutive, données chiffrées, acteurs, enseignements majeurs, vocabulaire et chronologie).
+Découper et structurer le document en Notions Clés et Modules d'apprentissage fondamentaux pour alimenter la création de QCMs, Fiches de Révision, Flashcards et Sujets d'Écrit.
 
 ## CONSIGNES D'EXTRACTION STRICTES
-1. **Synthèse globale (summary)** : Rédiger un résumé exécutif fluide, approfondi et structuré.
-2. **Données & Chiffres clés (keyFigures)** : Extraire tous les montants, pourcentages, statistiques et dates chiffrées avec leur contexte exact.
-3. **Acteurs & Institutions (entities)** : Lister les institutions, organes, agences ou pays mentionnés avec leurs rôles statutaires.
-4. **Points clés incontournables (takeaways)** : Lister 5 à 10 enseignements fondamentaux indispensables pour un candidat EPSO.
-5. **Vocabulaire & Sigles (vocabulary)** : Lister les termes techniques, juridiques ou acronymes avec leurs définitions exactes tirées du texte.
-6. **Chronologie & Traités (timeline)** : Extraire les étapes chronologiques, dates et traités cités.
+1. **Modules & Chapitres (modules)** : Découper le document en 2 à 5 modules thématiques logiques.
+2. **Notions Clés (notions)** : Pour chaque module, isoler les concepts fondamentaux (notions, procédures, règles, mécanismes). Chaque notion doit contenir un résumé, ses points clés et sa catégorie.
+3. **Synthèse globale (summary)** : Rédiger un résumé exécutif fluide, approfondi et structuré.
+4. **Données & Chiffres clés (keyFigures)** : Extraire tous les montants, pourcentages, statistiques et dates chiffrées avec leur contexte exact.
+5. **Acteurs & Institutions (entities)** : Lister les institutions, organes, agences ou pays mentionnés avec leurs rôles statutaires.
+6. **Points clés incontournables (takeaways)** : Lister 5 à 10 enseignements fondamentaux indispensables pour un candidat EPSO.
+7. **Vocabulaire & Sigles (vocabulary)** : Lister les termes techniques, juridiques ou acronymes avec leurs définitions exactes.
+8. **Chronologie & Traités (timeline)** : Extraire les étapes chronologiques, dates et traités cités.
 `;
 
 export const FLASHCARD_SKILL = `
