@@ -290,6 +290,7 @@ export default function App() {
   const [quizStartTime, setQuizStartTime] = useState<number | null>(null);
   const [quizHistory, setQuizHistory] = useState<Array<{ id: string, title: string, category: string, score: number, total: number, timeSpentSec: number, date: number }>>([]);
   const [textSelectionModal, setTextSelectionModal] = useState<string | null>(null);
+  const [isDbLoaded, setIsDbLoaded] = useState(false);
 
   // Local Directory Storage (File System Access API)
   const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
@@ -457,7 +458,14 @@ export default function App() {
       }
     }).catch(console.error);
 
-    get('libraryDocuments').then((docs) => {
+    Promise.all([
+      get('libraryDocuments'),
+      get('libraryFolders'),
+      get('savedFactSheets'),
+      get('savedFlashcards'),
+      get('savedDocAnalyses'),
+      get('savedQuizzes')
+    ]).then(([docs, folders, sheets, decks, analyses, quizzes]) => {
       if (docs && Array.isArray(docs)) {
         const parsedDocs = docs.map((d: any) => {
           let blobUrl = '';
@@ -482,33 +490,19 @@ export default function App() {
           if (found) setUploadedDocument(found);
         }
       }
-    }).catch(console.error);
 
-    get('libraryFolders').then((folders) => {
-      if (folders && Array.isArray(folders)) {
-        setLibraryFolders(folders);
-      }
-    }).catch(console.error);
+      if (folders && Array.isArray(folders)) setLibraryFolders(folders);
+      if (sheets && Array.isArray(sheets)) setSavedFactSheets(sheets);
+      if (decks && Array.isArray(decks)) setSavedFlashcards(decks);
+      if (analyses && Array.isArray(analyses)) setSavedDocAnalyses(analyses);
+      if (quizzes && Array.isArray(quizzes)) setSavedQuizzes(quizzes);
 
-    get('savedFactSheets').then((sheets) => {
-      if (sheets) setSavedFactSheets(sheets);
-    }).catch(console.error);
-
-    get('savedFlashcards').then((decks) => {
-      if (decks) setSavedFlashcards(decks);
-    }).catch(console.error);
-
-    get('savedDocAnalyses').then((analyses) => {
-      if (analyses) setSavedDocAnalyses(analyses);
-    }).catch(console.error);
-
-    get('savedQuizzes').then((quizzes) => {
-      if (quizzes && Array.isArray(quizzes) && quizzes.length > 0) {
-        setSavedQuizzes(quizzes);
-      }
-    }).catch(console.error);
-
-    refreshStorageEstimate();
+      setIsDbLoaded(true);
+      refreshStorageEstimate();
+    }).catch(err => {
+      console.error("Erreur lors du chargement initial IndexedDB", err);
+      setIsDbLoaded(true);
+    });
   }, []);
 
   useEffect(() => {
@@ -518,35 +512,35 @@ export default function App() {
   }, [uploadedDocument]);
 
   useEffect(() => {
-    if (libraryDocuments.length > 0) {
-       const docsToStore = libraryDocuments.map(d => ({ ...d, url: '' }));
-       set('libraryDocuments', docsToStore).catch(console.error);
-    } else {
-       set('libraryDocuments', []).catch(console.error);
-    }
-  }, [libraryDocuments]);
+    if (!isDbLoaded) return;
+    const docsToStore = libraryDocuments.map(d => ({ ...d, url: '' }));
+    set('libraryDocuments', docsToStore).catch(console.error);
+  }, [libraryDocuments, isDbLoaded]);
 
   useEffect(() => {
+    if (!isDbLoaded) return;
     set('libraryFolders', libraryFolders).catch(console.error);
-  }, [libraryFolders]);
+  }, [libraryFolders, isDbLoaded]);
 
   useEffect(() => {
+    if (!isDbLoaded) return;
     set('savedFactSheets', savedFactSheets).catch(console.error);
-  }, [savedFactSheets]);
+  }, [savedFactSheets, isDbLoaded]);
 
   useEffect(() => {
+    if (!isDbLoaded) return;
     set('savedFlashcards', savedFlashcards).catch(console.error);
-  }, [savedFlashcards]);
+  }, [savedFlashcards, isDbLoaded]);
 
   useEffect(() => {
+    if (!isDbLoaded) return;
     set('savedDocAnalyses', savedDocAnalyses).catch(console.error);
-  }, [savedDocAnalyses]);
+  }, [savedDocAnalyses, isDbLoaded]);
 
   useEffect(() => {
-    if (savedQuizzes.length > 0) {
-      set('savedQuizzes', savedQuizzes).catch(console.error);
-    }
-  }, [savedQuizzes]);
+    if (!isDbLoaded) return;
+    set('savedQuizzes', savedQuizzes).catch(console.error);
+  }, [savedQuizzes, isDbLoaded]);
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'qcm' | 'english' | 'fact_sheets' | 'library'>(() => {
     const saved = localStorage.getItem('qcm_active_tab') as any;
