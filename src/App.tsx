@@ -120,7 +120,11 @@ interface DocumentAnalysisResult {
 type AppState = 'UPLOAD' | 'PROCESSING' | 'QUIZ' | 'RESULTS' | 'ESSAY_WRITING' | 'ESSAY_RESULTS' | 'FACT_SHEET' | 'FLASHCARDS' | 'DOCUMENT_VIEWER' | 'DOCUMENT_ANALYSIS';
 
 export default function App() {
-  const [appState, setAppState] = useState<AppState>('UPLOAD');
+  const [appState, setAppState] = useState<AppState>(() => {
+    const saved = localStorage.getItem('qcm_app_state') as AppState;
+    if (saved && saved !== 'PROCESSING') return saved;
+    return 'UPLOAD';
+  });
   const [questions, setQuestions] = useState<Question[]>([]);
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -240,7 +244,7 @@ export default function App() {
     reader.readAsText(file);
   };
   
-  const [uploadedDocument, setUploadedDocument] = useState<{file: File, url: string, numPages: number, type: string, folderId?: string | null} | null>(null);
+  const [uploadedDocument, setUploadedDocument] = useState<{id?: string, name?: string, file: File, url: string, numPages: number, type: string, folderId?: string | null} | null>(null);
   const [pdfPageRange, setPdfPageRange] = useState<{start: number, end: number}>({start: 1, end: 1});
   const [chunkMode, setChunkMode] = useState<'manual' | 'auto5' | 'auto20'>('manual');
   const [processingProgress, setProcessingProgress] = useState<{current: number, total: number} | null>(null);
@@ -454,12 +458,29 @@ export default function App() {
     }).catch(console.error);
 
     get('libraryDocuments').then((docs) => {
-      if (docs) {
-        const parsedDocs = docs.map((d: any) => ({
-          ...d,
-          url: d.file ? URL.createObjectURL(d.file) : d.url
-        }));
+      if (docs && Array.isArray(docs)) {
+        const parsedDocs = docs.map((d: any) => {
+          let blobUrl = '';
+          if (d.file) {
+            try {
+              blobUrl = URL.createObjectURL(d.file);
+            } catch (e) {
+              console.error("Erreur création ObjectURL pour doc", d.name, e);
+            }
+          }
+          return {
+            ...d,
+            url: blobUrl || d.url || ''
+          };
+        });
         setLibraryDocuments(parsedDocs);
+
+        // Restauration du document actif lors du rafraîchissement
+        const savedDocId = localStorage.getItem('qcm_uploaded_doc_id');
+        if (savedDocId) {
+          const found = parsedDocs.find((doc: any) => doc.id === savedDocId);
+          if (found) setUploadedDocument(found);
+        }
       }
     }).catch(console.error);
 
@@ -491,9 +512,17 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (uploadedDocument?.id) {
+      localStorage.setItem('qcm_uploaded_doc_id', uploadedDocument.id);
+    }
+  }, [uploadedDocument]);
+
+  useEffect(() => {
     if (libraryDocuments.length > 0) {
        const docsToStore = libraryDocuments.map(d => ({ ...d, url: '' }));
        set('libraryDocuments', docsToStore).catch(console.error);
+    } else {
+       set('libraryDocuments', []).catch(console.error);
     }
   }, [libraryDocuments]);
 
@@ -519,7 +548,21 @@ export default function App() {
     }
   }, [savedQuizzes]);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'qcm' | 'english' | 'fact_sheets' | 'library'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'qcm' | 'english' | 'fact_sheets' | 'library'>(() => {
+    const saved = localStorage.getItem('qcm_active_tab') as any;
+    if (saved) return saved;
+    return 'dashboard';
+  });
+
+  useEffect(() => {
+    if (appState !== 'PROCESSING') {
+      localStorage.setItem('qcm_app_state', appState);
+    }
+  }, [appState]);
+
+  useEffect(() => {
+    localStorage.setItem('qcm_active_tab', activeTab);
+  }, [activeTab]);
   const [activeQcmTab, setActiveQcmTab] = useState<'numerical' | 'verbal' | 'eu' | 'digcomp' | 'cognitive'>('numerical');
   const [testDifficulties, setTestDifficulties] = useState<Record<string, 'facile' | 'moyen' | 'difficile'>>({});
   const [questionCount, setQuestionCount] = useState<number>(5);
