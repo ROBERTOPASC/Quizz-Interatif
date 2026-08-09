@@ -1343,14 +1343,26 @@ const ENGLISH_TYPES = [
         break;
     }
 
-    const { text: contextText, docNames, folderName } = await extractAnalysisTextFromSource(
+    let { text: contextText, docNames, folderName } = await extractAnalysisTextFromSource(
       qcmSourceMode,
       qcmSourceFolderId,
       selectedEuDocId
     );
 
     if (!contextText || contextText.trim().length === 0) {
-      setError("Impossible de générer le QCM : Aucun des documents sélectionnés n'a été analysé par l'IA au préalable. Veuillez d'abord analyser les documents dans la bibliothèque.");
+      // Fallback automatique sur l'extraction directe du texte du document
+      const fallback = await extractTextFromSource(
+        qcmSourceMode,
+        qcmSourceFolderId,
+        selectedEuDocId
+      );
+      contextText = fallback.text;
+      docNames = fallback.docNames;
+      folderName = fallback.folderName;
+    }
+
+    if (!contextText || contextText.trim().length === 0) {
+      setError("Aucun document ou texte disponible pour générer ce QCM RAG. Veuillez ajouter des documents dans le dossier ou la bibliothèque.");
       setAppState('UPLOAD');
       return;
     }
