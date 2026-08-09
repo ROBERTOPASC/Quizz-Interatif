@@ -3536,17 +3536,7 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                   </div>
                 )}
                 
-                <div className="mb-6">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Nombre de questions ({questionCount})</label>
-                  <input 
-                    type="range" 
-                    min="1" 
-                    max="20" 
-                    value={questionCount} 
-                    onChange={(e) => setQuestionCount(parseInt(e.target.value))}
-                    className="w-full accent-indigo-600"
-                  />
-                </div>
+
                 
                 <div className="mb-8">
                   <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Langue de sortie</label>
