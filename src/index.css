@@ -92,42 +92,71 @@ select, .custom-select {
   display: none;
 }
 
+.font-heading {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif !important;
+}
+
 /* ============================================ */
 /* Callouts thematiques pour fiches de revision */
 /* ============================================ */
 .callout {
   border-left: 4px solid;
-  padding: 1rem 1.25rem;
-  border-radius: 0.75rem;
-  margin-bottom: 1rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 1rem;
+  margin-bottom: 1.25rem;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+.callout:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
 }
 .callout-institutions {
   border-color: #3b82f6;
-  background: #eff6ff;
+  background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
 }
 .dark .callout-institutions {
-  background: rgba(59, 130, 246, 0.1);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(15, 23, 42, 0.6) 100%);
+  border-color: #60a5fa;
 }
 .callout-policies {
   border-color: #10b981;
-  background: #ecfdf5;
+  background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%);
 }
 .dark .callout-policies {
-  background: rgba(16, 185, 129, 0.1);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(15, 23, 42, 0.6) 100%);
+  border-color: #34d399;
 }
 .callout-dates {
   border-color: #f59e0b;
-  background: #fffbeb;
+  background: linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);
 }
 .dark .callout-dates {
-  background: rgba(245, 158, 11, 0.1);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(15, 23, 42, 0.6) 100%);
+  border-color: #fbbf24;
 }
 .callout-vocabulary {
   border-color: #8b5cf6;
-  background: #f5f3ff;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ffffff 100%);
 }
 .dark .callout-vocabulary {
-  background: rgba(139, 92, 246, 0.1);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(15, 23, 42, 0.6) 100%);
+  border-color: #a78bfa;
+}
+
+/* Animations de cascade */
+@keyframes cardFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-card-in {
+  animation: cardFadeInUp 0.4s ease-out forwards;
 }
 
 /* ================================ */
