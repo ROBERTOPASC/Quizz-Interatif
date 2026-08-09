@@ -33,6 +33,7 @@ interface Question {
   options: string[];
   correctAnswerIndex: number;
   explanation?: string;
+  category?: string;
 }
 
 interface SavedQuiz {
@@ -278,6 +279,13 @@ export default function App() {
 
   const [factSheetSourceMode, setFactSheetSourceMode] = useState<'none' | 'all_docs' | 'folder' | 'single_doc'>('none');
   const [factSheetSourceFolderId, setFactSheetSourceFolderId] = useState<string>('');
+
+  // Timer & Quiz Statistics States
+  const [quizTimerMode, setQuizTimerMode] = useState<'none' | '30s' | '60s' | '120s'>('none');
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [quizStartTime, setQuizStartTime] = useState<number | null>(null);
+  const [quizHistory, setQuizHistory] = useState<Array<{ id: string, title: string, category: string, score: number, total: number, timeSpentSec: number, date: number }>>([]);
+  const [textSelectionModal, setTextSelectionModal] = useState<string | null>(null);
 
   // Local Directory Storage (File System Access API)
   const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
@@ -570,7 +578,34 @@ export default function App() {
     
     const savedLocalUrl = localStorage.getItem('qcm_local_url');
     if (savedLocalUrl) setLocalLlmUrl(savedLocalUrl);
+
+    const savedHistory = localStorage.getItem('qcm_quiz_history');
+    if (savedHistory) {
+      try {
+        setQuizHistory(JSON.parse(savedHistory));
+      } catch (e) {}
+    }
   }, []);
+
+  // Décompte du minuteur pendant le QUIZ
+  useEffect(() => {
+    if (appState !== 'QUIZ' || quizTimerMode === 'none' || selectedAnswerIndex !== null) {
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev === null || prev <= 1) {
+          clearInterval(timer);
+          handleAnswerSelect(-1); // Timeout
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [appState, currentQuestionIndex, quizTimerMode, selectedAnswerIndex]);
 
   const toggleTheme = () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
@@ -2481,9 +2516,42 @@ Format JSON attendu :
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
       setSelectedAnswerIndex(null);
+      if (quizTimerMode !== 'none') {
+        const secs = quizTimerMode === '30s' ? 30 : quizTimerMode === '60s' ? 60 : 120;
+        setTimeLeft(secs);
+      }
     } else {
+      const timeSpentSec = quizStartTime ? Math.round((Date.now() - quizStartTime) / 1000) : 0;
+      const attempt = {
+        id: crypto.randomUUID(),
+        title: questions[0]?.category || 'QCM EPSO',
+        category: questions[0]?.category || 'Général',
+        score: score,
+        total: questions.length,
+        timeSpentSec,
+        date: Date.now()
+      };
+      setQuizHistory(prev => {
+        const updated = [attempt, ...prev];
+        localStorage.setItem('qcm_quiz_history', JSON.stringify(updated));
+        return updated;
+      });
       setAppState('RESULTS');
     }
+  };
+
+  const exportFlashcardsToAnki = (cards: Flashcard[], title: string = 'Flashcards_EPSO') => {
+    if (!cards || cards.length === 0) return;
+    const tsvLines = cards.map(c => `${(c.front || '').replace(/\t/g, ' ')}\t${(c.back || '').replace(/\t/g, ' ')}`);
+    const blob = new Blob([tsvLines.join('\n')], { type: 'text/tab-separated-values;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `anki_${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}.tsv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const evaluateEssay = async () => {
@@ -3518,6 +3586,34 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                   <span className="text-xl font-medium">Document lu avec succès.</span>
                 </div>
               )}
+              {/* Barre d'action surlignage / création flashcard */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  Sélectionnez un texte dans le document pour créer une flashcard instantanée.
+                </span>
+                <button
+                  onClick={() => {
+                    const sel = window.getSelection()?.toString().trim();
+                    if (!sel) {
+                      alert("Veuillez d'abord sélectionner ou surligner du texte dans le document.");
+                      return;
+                    }
+                    const newCard: Flashcard = {
+                      front: sel.length > 50 ? sel.slice(0, 50) + "..." : sel,
+                      back: sel
+                    };
+                    setFlashcards([newCard]);
+                    setCurrentFlashcardIndex(0);
+                    setIsFlashcardFlipped(false);
+                    setAppState('FLASHCARDS');
+                  }}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Créer Flashcard</span>
+                </button>
+              </div>
             </div>
             
             <div className="w-full md:w-[400px] flex flex-col gap-6 shrink-0">
@@ -3981,6 +4077,35 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                             )}
                           </div>
                         )}
+                      </div>
+
+                      {/* Sélecteur de Minuteur EPSO */}
+                      <div className="flex flex-wrap items-center justify-between gap-3 mb-4 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-2xl border border-slate-200/80 dark:border-slate-700/80">
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 font-heading">
+                          <Clock className="w-4 h-4 text-amber-500 shrink-0" />
+                          <span>Mode Minuteur Concours :</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {[
+                            { id: 'none', label: 'Sans minuteur' },
+                            { id: '30s', label: '30s / Q' },
+                            { id: '60s', label: '60s (EPSO)' },
+                            { id: '120s', label: '120s (Calcul)' }
+                          ].map((m) => (
+                            <button
+                              key={m.id}
+                              onClick={() => setQuizTimerMode(m.id as any)}
+                              className={cn(
+                                "px-3 py-1 rounded-xl text-xs font-bold transition-all border",
+                                quizTimerMode === m.id
+                                  ? "bg-amber-500 text-white border-amber-500 shadow-xs"
+                                  : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                              )}
+                            >
+                              {m.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
 
                       {/* Thematic Cards Grid */}
@@ -5306,9 +5431,35 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                           {/* 3. FICHES DE REVISION */}
                           {(generatedFilter === 'all' || generatedFilter === 'fact_sheets') && savedFactSheets.length > 0 && (
                             <div>
-                              <div className="flex items-center gap-2 mb-4">
-                                <BookOpenCheck className="w-5 h-5 text-emerald-500" />
-                                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Fiches de Révision ({savedFactSheets.filter(s => matchesGeneratedFolderFilter(s.folderId)).length})</h4>
+                              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                                <div className="flex items-center gap-2">
+                                  <BookOpenCheck className="w-5 h-5 text-emerald-500" />
+                                  <h4 className="text-lg font-bold text-slate-900 dark:text-white">Fiches de Révision ({savedFactSheets.filter(s => matchesGeneratedFolderFilter(s.folderId)).length})</h4>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const filteredSheets = savedFactSheets.filter(s => matchesGeneratedFolderFilter(s.folderId));
+                                    if (filteredSheets.length === 0) return;
+                                    const allCombinedConcepts: FactSheetConcept[] = [];
+                                    filteredSheets.forEach(s => {
+                                      if (s.concepts) allCombinedConcepts.push(...s.concepts);
+                                    });
+                                    const bookletTitle = generatedFolderFilter === 'all'
+                                      ? "Livret Général de Révision EPSO"
+                                      : `Livret de Révision - ${libraryFolders.find(f => f.id === generatedFolderFilter)?.name || 'Dossier'}`;
+                                    setFactSheetContent({
+                                      title: bookletTitle,
+                                      concepts: allCombinedConcepts,
+                                      docName: `${filteredSheets.length} fiches regroupées`
+                                    });
+                                    setAppState('FACT_SHEET');
+                                  }}
+                                  className="px-3.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 dark:text-emerald-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border border-emerald-200 dark:border-emerald-800 cursor-pointer"
+                                  title="Regrouper et imprimer sous forme de livret A4"
+                                >
+                                  <Download className="w-4 h-4" />
+                                  <span>Imprimer Livret de Révision</span>
+                                </button>
                               </div>
                               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {savedFactSheets
@@ -5611,7 +5762,36 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
         )}
 
         {appState === 'QUIZ' && questions.length > 0 && (
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-3xl mx-auto space-y-4">
+            {/* Header d'avancement & Minuteur EPSO */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <span className="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-extrabold text-xs rounded-lg border border-indigo-100 dark:border-indigo-800">
+                  Question {currentQuestionIndex + 1} / {questions.length}
+                </span>
+                <span className="text-xs text-slate-500 font-semibold">
+                  Score actuel : {score}
+                </span>
+              </div>
+
+              {/* Minuteur en direct */}
+              <div className="flex items-center gap-2">
+                <div className={cn(
+                  "flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-extrabold border transition-all",
+                  quizTimerMode === 'none'
+                    ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                    : (timeLeft !== null && timeLeft <= 5)
+                      ? "bg-rose-100 text-rose-700 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800 animate-bounce"
+                      : "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-800"
+                )}>
+                  <Clock className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    {quizTimerMode === 'none' ? "Sans minuteur" : `${timeLeft ?? 0}s`}
+                  </span>
+                </div>
+              </div>
+            </div>
+
             <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
               <div className="p-8 sm:p-10">
                 
@@ -5711,13 +5891,26 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
               <Award className="w-12 h-12" />
             </div>
             <h2 className="text-4xl font-bold text-slate-900 dark:text-white mb-4">Test Terminé !</h2>
-            <p className="text-xl text-slate-600 dark:text-slate-400 mb-10">
-              Score : <span className="font-bold text-blue-600 dark:text-blue-400">{score}</span> sur <span className="font-bold text-slate-900 dark:text-white">{questions.length}</span>
-            </p>
-            
-            <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-4 mb-12 overflow-hidden">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-xl mx-auto mb-8 text-left">
+              <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Score Obtenu</p>
+                <p className="text-2xl font-extrabold text-slate-900 dark:text-white">{score} <span className="text-sm font-semibold text-slate-400">/ {questions.length}</span></p>
+              </div>
+              <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Taux de réussite</p>
+                <p className="text-2xl font-extrabold text-emerald-600 dark:text-emerald-400">{Math.round((score / questions.length) * 100)}%</p>
+              </div>
+              <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs col-span-2 sm:col-span-1">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Diagnostic EPSO</p>
+                <p className={cn("text-base font-extrabold", (score / questions.length) >= 0.7 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
+                  {(score / questions.length) >= 0.7 ? "Réussi (>=70%)" : "À retravailler (<70%)"}
+                </p>
+              </div>
+            </div>
+
+            <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 mb-10 overflow-hidden border border-slate-200 dark:border-slate-700">
               <div 
-                className="bg-blue-600 dark:bg-blue-500 h-4 rounded-full transition-all duration-1000 ease-out"
+                className="bg-gradient-to-r from-indigo-500 to-emerald-500 h-full rounded-full transition-all duration-1000 ease-out"
                 style={{ width: `${(score / questions.length) * 100}%` }}
               ></div>
             </div>
@@ -6136,13 +6329,23 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
         {appState === 'FLASHCARDS' && flashcards.length > 0 && (
           <div className="max-w-2xl mx-auto">
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2 font-heading">
                 <Layers className="w-6 h-6 text-blue-500" />
                 Flashcards
               </h2>
-              <span className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-1.5 rounded-full text-sm font-semibold">
-                {currentFlashcardIndex + 1} / {flashcards.length}
-              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => exportFlashcardsToAnki(flashcards, 'EPSO_Flashcards')}
+                  className="px-3.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:hover:bg-blue-900/80 dark:text-blue-300 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 border border-blue-200 dark:border-blue-800"
+                  title="Exporter au format Anki (.tsv)"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Exporter Anki (.tsv)</span>
+                </button>
+                <span className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-4 py-1.5 rounded-full text-sm font-semibold">
+                  {currentFlashcardIndex + 1} / {flashcards.length}
+                </span>
+              </div>
             </div>
 
             <div className="relative w-full aspect-video" style={{ perspective: '1000px' }}>
