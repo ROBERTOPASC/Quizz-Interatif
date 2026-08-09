@@ -390,6 +390,25 @@ export default function App() {
         alert("L'API File System Access n'est pas supportée sur ce navigateur. Veuillez utiliser Chrome ou Edge.");
         return;
       }
+
+      // If we already have a stored handle, try to re-request permission first
+      const existingHandle = await get<FileSystemDirectoryHandle>('working_dir_handle');
+      if (existingHandle) {
+        try {
+          const perm = await (existingHandle as any).requestPermission({ mode: 'readwrite' });
+          if (perm === 'granted') {
+            setDirHandle(existingHandle);
+            setDirName(existingHandle.name);
+            setDirSyncStatus('connected');
+            showLibraryNotification(`Dossier local "${existingHandle.name}" reconnecté !`);
+            await syncReadFromFolder(existingHandle);
+            return;
+          }
+        } catch (e) {
+          // Permission denied or handle invalid, fall through to showDirectoryPicker
+        }
+      }
+
       const handle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
       setDirHandle(handle);
       setDirName(handle.name);
@@ -408,18 +427,20 @@ export default function App() {
     get<FileSystemDirectoryHandle>('working_dir_handle').then(async (handle) => {
       if (handle) {
         try {
-          const perm = await (handle as any).queryPermission({ mode: 'readwrite' });
+          let perm = await (handle as any).queryPermission({ mode: 'readwrite' });
           if (perm === 'granted') {
             setDirHandle(handle);
             setDirName(handle.name);
             setDirSyncStatus('connected');
             await syncReadFromFolder(handle);
           } else {
+            // Permission lost - store handle name so user knows which folder to reconnect
             setDirName(handle.name + " (Cliquer pour autoriser)");
             setDirSyncStatus('error');
           }
         } catch (e) {
-          console.error("Erreur chargement dossier local réinventé", e);
+          console.error("Erreur chargement dossier local", e);
+          setDirSyncStatus('error');
         }
       }
     }).catch(console.error);
