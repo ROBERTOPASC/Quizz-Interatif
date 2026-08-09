@@ -3521,103 +3521,147 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
             </div>
             
             <div className="w-full md:w-[400px] flex flex-col gap-6 shrink-0">
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 rounded-3xl shadow-sm">
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-6">
-                  <Settings className="w-6 h-6 text-indigo-500" />
-                  Générer depuis ce document
-                </h3>
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 md:p-8 rounded-3xl shadow-lg relative overflow-hidden">
+                {/* En-tete du panneau */}
+                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 dark:bg-indigo-900/40 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold font-heading text-slate-900 dark:text-white leading-tight">
+                      Configuration Analyse IA
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Personnalisez l'extraction et la génération
+                    </p>
+                  </div>
+                </div>
                 
+                {/* Plage de pages pour PDF */}
                 {uploadedDocument.type === 'pdf' && uploadedDocument.numPages > 0 && (
                   <div className="mb-6">
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">Mode d'analyse (Total: {uploadedDocument.numPages} pages)</label>
-                    <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-4">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2.5 font-heading">
+                      Segmentation ({uploadedDocument.numPages} pages)
+                    </label>
+                    <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 mb-3 border border-slate-200/80 dark:border-slate-700/80">
                       <button
                         onClick={() => setChunkMode('manual')}
-                        className={`flex-1 px-2 py-2 rounded-lg text-xs font-bold transition-colors ${chunkMode === 'manual' ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+                        className={cn(
+                          "flex-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-all",
+                          chunkMode === 'manual'
+                            ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                            : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                        )}
                       >
                         Manuel
                       </button>
                       <button
                         onClick={() => setChunkMode('auto5')}
-                        className={`flex-1 px-2 py-2 rounded-lg text-xs font-bold transition-colors ${chunkMode === 'auto5' ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+                        className={cn(
+                          "flex-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-all",
+                          chunkMode === 'auto5'
+                            ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                            : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                        )}
                       >
                         Auto (5p)
                       </button>
                       <button
                         onClick={() => setChunkMode('auto20')}
-                        className={`flex-1 px-2 py-2 rounded-lg text-xs font-bold transition-colors ${chunkMode === 'auto20' ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+                        className={cn(
+                          "flex-1 px-2 py-1.5 rounded-lg text-xs font-bold transition-all",
+                          chunkMode === 'auto20'
+                            ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                            : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                        )}
                       >
                         Auto (20p)
                       </button>
                     </div>
 
                     {chunkMode === 'manual' && (
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl border border-slate-200/60 dark:border-slate-700/60">
                         <div className="flex-1">
-                          <span className="text-xs text-slate-500 mb-1 block">Début</span>
+                          <span className="text-[11px] font-semibold text-slate-500 mb-1 block">De la page</span>
                           <input 
                             type="number" 
                             min={1} 
                             max={pdfPageRange.end} 
                             value={pdfPageRange.start}
                             onChange={(e) => setPdfPageRange({...pdfPageRange, start: parseInt(e.target.value) || 1})}
-                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 outline-none focus:border-indigo-500 dark:focus:border-indigo-400"
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-indigo-500 dark:focus:border-indigo-400"
                           />
                         </div>
-                        <span className="text-slate-400 mt-5">-</span>
+                        <span className="text-slate-400 font-bold mt-4">à</span>
                         <div className="flex-1">
-                          <span className="text-xs text-slate-500 mb-1 block">Fin</span>
+                          <span className="text-[11px] font-semibold text-slate-500 mb-1 block">À la page</span>
                           <input 
                             type="number" 
                             min={pdfPageRange.start} 
                             max={uploadedDocument.numPages} 
                             value={pdfPageRange.end}
                             onChange={(e) => setPdfPageRange({...pdfPageRange, end: parseInt(e.target.value) || pdfPageRange.start})}
-                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 outline-none focus:border-indigo-500 dark:focus:border-indigo-400"
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 text-xs font-bold outline-none focus:border-indigo-500 dark:focus:border-indigo-400"
                           />
                         </div>
                       </div>
                     )}
                   </div>
                 )}
-                
 
-                
-                <div className="mb-8">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Langue de sortie</label>
-                  <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+                {/* Langue de sortie */}
+                <div className="mb-6">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2 font-heading">
+                    Langue de sortie
+                  </label>
+                  <div className="flex bg-slate-100 dark:bg-slate-800 rounded-xl p-1 border border-slate-200/80 dark:border-slate-700/80">
                     <button
                       onClick={() => setQuestionLanguage('fr')}
-                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${questionLanguage === 'fr' ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+                      className={cn(
+                        "flex-1 px-4 py-2 rounded-lg text-xs font-bold transition-all",
+                        questionLanguage === 'fr'
+                          ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      )}
                     >
-                      Français
+                      Français (FR)
                     </button>
                     <button
                       onClick={() => setQuestionLanguage('en')}
-                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-bold transition-colors ${questionLanguage === 'en' ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300'}`}
+                      className={cn(
+                        "flex-1 px-4 py-2 rounded-lg text-xs font-bold transition-all",
+                        questionLanguage === 'en'
+                          ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs"
+                          : "text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                      )}
                     >
-                      English
+                      English (EN)
                     </button>
                   </div>
                 </div>
-                
+
+                {/* Type de traitement IA */}
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Type de traitement IA</label>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2 font-heading">
+                    Type de traitement IA
+                  </label>
                   <select 
                     value={docProcessingType}
                     onChange={(e) => setDocProcessingType(e.target.value as any)}
-                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 dark:focus:border-indigo-400 font-medium text-slate-700 dark:text-slate-300"
+                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 dark:focus:border-indigo-400 font-bold text-xs text-slate-800 dark:text-slate-200 custom-select"
                   >
-                    <option value="document_analysis">Analyse Complète du Document (Synthèse, Chiffres, Acteurs)</option>
-                    <option value="fact_sheet_general">Fiche de révision (Général/Concepts clés)</option>
-                    <option value="fact_sheet_institutions">Fiche thématique: Institutions et Organes de l'UE</option>
-                    <option value="fact_sheet_history">Fiche thématique: Histoire et Traités de l'UE</option>
-                    <option value="fact_sheet_policies">Fiche thématique: Politiques de l'UE</option>
-                    <option value="vocab">Vocabulaire & Expressions (Anglais/EPSO)</option>
-                    <option value="english">Règles de Grammaire & Structure (Anglais)</option>
+                    <option value="document_analysis">Analyse Complète RAG (Synthèse, Chiffres, Acteurs)</option>
+                    <option value="qcm">QCM Connaissance de l'UE (RAG Extraite)</option>
+                    <option value="fact_sheet_general">Fiche de révision générale (Concepts clés)</option>
+                    <option value="fact_sheet_institutions">Fiche thématique: Institutions et Organes</option>
+                    <option value="fact_sheet_history">Fiche thématique: Histoire et Traités</option>
+                    <option value="fact_sheet_policies">Fiche thématique: Politiques Européennes</option>
+                    <option value="vocab">Vocabulaire & Acronymes EPSO</option>
+                    <option value="english">Anglais EPSO & Structure Administrative</option>
                   </select>
                 </div>
-                
+
+                {/* Bouton d'action principal */}
                 <button
                   onClick={() => {
                      if (docProcessingType === 'document_analysis') {
@@ -3633,17 +3677,17 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                         generateFactSheetOrVocabFromDocument(mode);
                      }
                   }}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2 mb-3 shadow-sm hover:shadow"
+                  className="w-full bg-gradient-to-r from-indigo-600 to-emerald-600 hover:from-indigo-700 hover:to-emerald-700 text-white font-bold py-3.5 px-6 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg active:scale-98 text-sm font-heading cursor-pointer"
                 >
                   <BrainCircuit className="w-5 h-5" />
-                  Lancer le traitement IA
+                  <span>Lancer l'Analyse IA</span>
                 </button>
                 
                 <button
                   onClick={() => setAppState('UPLOAD')}
-                  className="w-full mt-4 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 font-medium py-3 px-6 rounded-xl transition-colors"
+                  className="w-full mt-3 bg-transparent hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 font-semibold py-2.5 px-6 rounded-xl transition-colors text-xs text-center"
                 >
-                  Annuler
+                  Retour au chargement
                 </button>
               </div>
             </div>
