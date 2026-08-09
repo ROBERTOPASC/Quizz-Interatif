@@ -119,6 +119,99 @@ interface DocumentAnalysisResult {
 
 type AppState = 'UPLOAD' | 'PROCESSING' | 'QUIZ' | 'RESULTS' | 'ESSAY_WRITING' | 'ESSAY_RESULTS' | 'FACT_SHEET' | 'FLASHCARDS' | 'DOCUMENT_VIEWER' | 'DOCUMENT_ANALYSIS';
 
+function PdfCanvasViewer({ file, url }: { file?: File | Blob, url?: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const renderPdf = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        let pdfData: any = null;
+        if (file) {
+          const buffer = await file.arrayBuffer();
+          pdfData = { data: buffer };
+        } else if (url) {
+          pdfData = { url };
+        } else {
+          throw new Error("Aucune source PDF disponible.");
+        }
+
+        const pdf = await pdfjsLib.getDocument(pdfData).promise;
+        if (!isMounted || !containerRef.current) return;
+
+        containerRef.current.innerHTML = '';
+
+        for (let i = 1; i <= Math.min(pdf.numPages, 50); i++) {
+          const page = await pdf.getPage(i);
+          const viewport = page.getViewport({ scale: 1.25 });
+          
+          const pageWrapper = document.createElement('div');
+          pageWrapper.className = "mb-6 bg-white dark:bg-slate-900 shadow-md rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 p-3 flex flex-col items-center relative";
+
+          const badge = document.createElement('span');
+          badge.className = "absolute top-4 right-4 px-2.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 text-[10px] font-bold rounded-lg border border-slate-200 dark:border-slate-700";
+          badge.innerText = `Page ${i} / ${pdf.numPages}`;
+          pageWrapper.appendChild(badge);
+
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+          canvas.className = "w-full max-w-full h-auto rounded-xl mt-6";
+
+          pageWrapper.appendChild(canvas);
+          containerRef.current.appendChild(pageWrapper);
+
+          if (context) {
+            await (page.render as any)({ canvasContext: context, viewport, canvas }).promise;
+          }
+        }
+        if (isMounted) setLoading(false);
+      } catch (err: any) {
+        if (isMounted) {
+          console.error("Erreur de rendu PDF Canvas", err);
+          setError(err.message || "Erreur de rendu du PDF.");
+          setLoading(false);
+        }
+      }
+    };
+
+    renderPdf();
+    return () => { isMounted = false; };
+  }, [file, url]);
+
+  if (error) {
+    return (
+      <div className="w-full h-full p-8 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-500 text-center">
+        <FileText className="w-16 h-16 mb-4 opacity-50 text-indigo-400" />
+        <span className="text-xl font-medium mb-2 text-slate-700 dark:text-slate-300">Aperçu du PDF indisponible</span>
+        <p className="text-xs text-red-500 mb-4">{error}</p>
+        {url && (
+          <a href={url} target="_blank" rel="noopener noreferrer" className="bg-indigo-600 text-white px-6 py-2 rounded-xl hover:bg-indigo-700 transition-colors font-medium text-xs">
+            Ouvrir dans un nouvel onglet
+          </a>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full h-full overflow-y-auto p-4 bg-slate-100/70 dark:bg-slate-950 hide-scrollbar">
+      {loading && (
+        <div className="py-16 text-center text-slate-500 flex flex-col items-center justify-center gap-3">
+          <RefreshCw className="w-8 h-8 animate-spin text-indigo-600 dark:text-indigo-400" />
+          <span className="text-sm font-bold text-slate-700 dark:text-slate-300 font-heading">Chargement du PDF via le moteur universel...</span>
+        </div>
+      )}
+      <div ref={containerRef} className="max-w-3xl mx-auto space-y-4" />
+    </div>
+  );
+}
+
 export default function App() {
   const [appState, setAppState] = useState<AppState>(() => {
     const saved = localStorage.getItem('qcm_app_state') as AppState;
@@ -3610,13 +3703,7 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
           <div className="max-w-6xl mx-auto h-[calc(100vh-120px)] flex flex-col md:flex-row gap-6 animate-in fade-in">
             <div className="flex-1 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col relative min-h-[60vh] md:min-h-0">
               {uploadedDocument.type === 'pdf' ? (
-                <object data={uploadedDocument.url} type="application/pdf" className="w-full h-full min-h-[60vh] md:min-h-full border-none" title="Liseuse PDF">
-                  <div className="w-full h-full p-8 flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-500 text-center">
-                    <FileText className="w-16 h-16 mb-4 opacity-50 text-indigo-400" />
-                    <span className="text-xl font-medium mb-4 text-slate-700 dark:text-slate-300">Le navigateur a bloqué l'aperçu du PDF.</span>
-                    <a href={uploadedDocument.url} target="_blank" rel="noopener noreferrer" className="bg-indigo-600 text-white px-6 py-2 rounded-xl hover:bg-indigo-700 transition-colors font-medium">Ouvrir le PDF dans un nouvel onglet</a>
-                  </div>
-                </object>
+                <PdfCanvasViewer file={uploadedDocument.file} url={uploadedDocument.url} />
               ) : (
                 <div className="w-full h-full p-8 flex items-center justify-center bg-slate-50 dark:bg-slate-800 text-slate-500">
                   <FileText className="w-16 h-16 mr-4 opacity-50" />
