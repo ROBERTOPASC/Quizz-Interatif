@@ -367,7 +367,7 @@ export default function App() {
   const [docProcessingType, setDocProcessingType] = useState<'qcm' | 'fact_sheet_general' | 'fact_sheet_institutions' | 'fact_sheet_history' | 'fact_sheet_policies' | 'vocab' | 'english' | 'document_analysis'>('document_analysis');
 
   // Filtering generated fact sheets and flashcards
-  const [generatedFolderFilter, setGeneratedFolderFilter] = useState<string>('all');
+  const [generatedFolderFilter, setGeneratedFolderFilter] = useState<string>('current');
   const [generatedTopicFilter, setGeneratedTopicFilter] = useState<string>('all');
 
   // Flexible Source Selection States for QCM EU & Fact Sheets
@@ -994,7 +994,9 @@ export default function App() {
   };
 
   const matchesGeneratedFolderFilter = (itemFolderId?: string | null) => {
+    if (librarySearchQuery.trim().length > 0) return true;
     if (generatedFolderFilter === 'all') return true;
+    if (generatedFolderFilter === 'current') return (itemFolderId || null) === (currentFolderId || null);
     if (generatedFolderFilter === 'root') return !itemFolderId;
     return itemFolderId === generatedFolderFilter;
   };
@@ -1233,6 +1235,9 @@ export default function App() {
   };
 
   const saveQuiz = (title: string, extractedQuestions: Question[], category?: string, subType?: string, docName?: string) => {
+    const targetFolderId = (qcmSourceMode === 'folder' ? qcmSourceFolderId : (qcmSourceMode === 'single_doc' ? libraryDocuments.find(d => d.id === selectedEuDocId)?.folderId : undefined)) || (uploadedDocument?.folderId) || (currentFolderId || undefined);
+    const targetFolderName = targetFolderId ? libraryFolders.find(f => f.id === targetFolderId)?.name : undefined;
+
     const newQuiz: SavedQuiz = {
       id: Date.now().toString(),
       title,
@@ -1240,7 +1245,9 @@ export default function App() {
       questions: extractedQuestions,
       category,
       subType,
-      docName
+      docName,
+      folderId: targetFolderId,
+      folderName: targetFolderName
     };
     const updatedQuizzes = [newQuiz, ...savedQuizzes];
     setSavedQuizzes(updatedQuizzes);
@@ -5250,6 +5257,108 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                           </div>
                         );
                       })()}
+
+                      {/* Contenus & Questions Générés dans ce dossier */}
+                      {(() => {
+                        const folderQuizzes = savedQuizzes.filter(q => (q.folderId || null) === currentFolderId);
+                        const folderSheets = savedFactSheets.filter(s => (s.folderId || null) === currentFolderId);
+                        const folderAnalyses = savedDocAnalyses.filter(a => (a.folderId || null) === currentFolderId);
+                        const folderDecks = savedFlashcards.filter(d => (d.folderId || null) === currentFolderId);
+
+                        const totalFolderGenerated = folderQuizzes.length + folderSheets.length + folderAnalyses.length + folderDecks.length;
+                        if (totalFolderGenerated === 0) return null;
+
+                        return (
+                          <div className="mt-12 pt-8 border-t border-slate-200 dark:border-slate-800">
+                            <div className="flex items-center gap-2 mb-6">
+                              <Sparkles className="w-5 h-5 text-amber-500" />
+                              <h4 className="text-xl font-bold font-heading text-slate-900 dark:text-white">
+                                Contenus Générés dans ce Dossier ({totalFolderGenerated})
+                              </h4>
+                            </div>
+
+                            <div className="space-y-6">
+                              {/* 1. QCM */}
+                              {folderQuizzes.length > 0 && (
+                                <div>
+                                  <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 font-heading">QCMs ({folderQuizzes.length})</h5>
+                                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {folderQuizzes.map(quiz => (
+                                      <div key={quiz.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs flex items-center justify-between gap-3">
+                                        <div className="truncate">
+                                          <p className="font-bold text-sm text-slate-900 dark:text-white truncate">{quiz.title}</p>
+                                          <p className="text-xs text-slate-500">{quiz.questions.length} questions</p>
+                                        </div>
+                                        <button
+                                          onClick={() => loadQuiz(quiz)}
+                                          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs shrink-0 cursor-pointer flex items-center gap-1"
+                                        >
+                                          <Award className="w-3.5 h-3.5" />
+                                          <span>Lancer</span>
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 2. Fiches */}
+                              {folderSheets.length > 0 && (
+                                <div>
+                                  <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 font-heading">Fiches de Révision ({folderSheets.length})</h5>
+                                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {folderSheets.map(sheet => (
+                                      <div key={sheet.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs flex items-center justify-between gap-3">
+                                        <div className="truncate">
+                                          <p className="font-bold text-sm text-slate-900 dark:text-white truncate">{sheet.title}</p>
+                                          <p className="text-xs text-slate-500">{sheet.concepts?.length || 0} notions</p>
+                                        </div>
+                                        <button
+                                          onClick={() => {
+                                            setFactSheetContent(sheet);
+                                            setAppState('FACT_SHEET');
+                                          }}
+                                          className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs shrink-0 cursor-pointer flex items-center gap-1"
+                                        >
+                                          <BookOpenCheck className="w-3.5 h-3.5" />
+                                          <span>Ouvrir</span>
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* 3. Analyses RAG */}
+                              {folderAnalyses.length > 0 && (
+                                <div>
+                                  <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 font-heading">Analyses RAG ({folderAnalyses.length})</h5>
+                                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {folderAnalyses.map(analysis => (
+                                      <div key={analysis.id} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs flex items-center justify-between gap-3">
+                                        <div className="truncate">
+                                          <p className="font-bold text-sm text-slate-900 dark:text-white truncate">{analysis.docName}</p>
+                                          <p className="text-xs text-slate-500">{analysis.modules?.length || 0} modules RAG</p>
+                                        </div>
+                                        <button
+                                          onClick={() => {
+                                            setDocAnalysisResult(analysis);
+                                            setAppState('DOCUMENT_ANALYSIS');
+                                          }}
+                                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs shrink-0 cursor-pointer flex items-center gap-1"
+                                        >
+                                          <Eye className="w-3.5 h-3.5" />
+                                          <span>Consulter</span>
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 
@@ -5330,8 +5439,9 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                             onChange={(e) => setGeneratedFolderFilter(e.target.value)}
                             className="bg-transparent border-0 text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer pr-2"
                           >
+                            <option value="current">Dossier Actuel ({currentFolderId ? libraryFolders.find(f => f.id === currentFolderId)?.name : 'Racine'})</option>
                             <option value="all">Tous les dossiers</option>
-                            <option value="root">Racine (Aucun dossier)</option>
+                            <option value="root">Seulement la racine</option>
                             {renderFolderSelectOptions(null, 0)}
                           </select>
                         </div>
