@@ -5489,36 +5489,80 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
         )}
 
         {appState === 'PROCESSING' && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="relative w-20 h-20 mb-8">
-              <div className="absolute inset-0 border-4 border-blue-100 dark:border-blue-900/30 rounded-full"></div>
-              <div className="absolute inset-0 border-4 border-blue-600 dark:border-blue-500 rounded-full border-t-transparent animate-spin"></div>
-            </div>
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Analyse en cours...</h2>
-            {processingProgress ? (
-              <p className="text-slate-500 dark:text-slate-400 text-center max-w-md font-medium text-lg mb-4">
-                Traitement de la partie {processingProgress.current} sur {processingProgress.total}...
-              </p>
-            ) : (
-              <p className="text-slate-500 dark:text-slate-400 text-center max-w-md mb-8">
-                L'IA analyse votre document pour extraire le contenu et préparer votre test...
-              </p>
-            )}
-            {processingProgress && (
-              <div className="w-64 bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-4 mb-8">
-                <div 
-                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
-                  style={{ width: `${(processingProgress.current / processingProgress.total) * 100}%` }}
-                ></div>
+          <div className="py-12 px-4 flex items-center justify-center animate-in fade-in zoom-in-95 duration-300">
+            <div className="w-full max-w-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-8 md:p-10 shadow-2xl relative overflow-hidden text-center">
+              {/* Effet halo lumineux arrière-plan */}
+              <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-64 h-64 bg-indigo-500/15 dark:bg-indigo-500/25 blur-3xl rounded-full pointer-events-none"></div>
+              <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 w-64 h-64 bg-emerald-500/10 dark:bg-emerald-500/20 blur-3xl rounded-full pointer-events-none"></div>
+
+              {/* Icone animée avec spinner concentrique */}
+              <div className="relative w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+                <div className="absolute inset-0 border-4 border-indigo-100 dark:border-indigo-950 rounded-full"></div>
+                <div className="absolute inset-0 border-4 border-indigo-600 dark:border-indigo-400 rounded-full border-t-transparent animate-spin"></div>
+                <div className="absolute inset-2 border-2 border-dashed border-emerald-400 dark:border-emerald-500 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '6s' }}></div>
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-900/50 border border-indigo-200 dark:border-indigo-700/50 flex items-center justify-center text-indigo-600 dark:text-indigo-300 shadow-inner">
+                  <BrainCircuit className="w-6 h-6 animate-pulse" />
+                </div>
               </div>
-            )}
-            
-            <button
-              onClick={resetApp}
-              className="mt-6 px-6 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium transition-colors"
-            >
-              Annuler
-            </button>
+
+              {/* Titre dynamique selon docProcessingType */}
+              <h2 className="text-2xl font-bold font-heading text-slate-900 dark:text-white mb-2">
+                {docProcessingType === 'qcm' ? "Génération du QCM EPSO..." :
+                 docProcessingType === 'document_analysis' ? "Analyse RAG du Document..." :
+                 docProcessingType === 'vocab' ? "Extraction du Vocabulaire..." :
+                 docProcessingType === 'english' ? "Préparation du Test d'Anglais..." :
+                 "Génération de la Fiche de Révision..."}
+              </h2>
+
+              {/* Sous-titre explicatif */}
+              {processingProgress ? (
+                <p className="text-slate-600 dark:text-slate-300 font-medium text-sm mb-6">
+                  Traitement du segment <span className="font-bold text-indigo-600 dark:text-indigo-400">{processingProgress.current}</span> sur <span className="font-bold text-indigo-600 dark:text-indigo-400">{processingProgress.total}</span>...
+                </p>
+              ) : (
+                <p className="text-slate-500 dark:text-slate-400 text-sm max-w-sm mx-auto mb-6 leading-relaxed">
+                  L'intelligence artificielle extrait les notions clés, formules et pièges pour générer votre module d'apprentissage...
+                </p>
+              )}
+
+              {/* Barre de progression ou animation fluide */}
+              {processingProgress ? (
+                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-3 mb-6 p-0.5 border border-slate-200 dark:border-slate-700 overflow-hidden">
+                  <div
+                    className="bg-gradient-to-r from-indigo-500 to-emerald-500 h-full rounded-full transition-all duration-500 shadow-xs"
+                    style={{ width: `${(processingProgress.current / processingProgress.total) * 100}%` }}
+                  ></div>
+                </div>
+              ) : (
+                <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2 mb-6 overflow-hidden relative">
+                  <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-emerald-400 to-indigo-500 w-1/2 h-full rounded-full animate-pulse"></div>
+                </div>
+              )}
+
+              {/* Étapes du processus */}
+              <div className="grid grid-cols-3 gap-2 mb-8 text-[11px] font-semibold">
+                <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-indigo-600 dark:text-indigo-300 flex flex-col items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>1. Lecture</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-indigo-600 dark:text-indigo-300 flex flex-col items-center gap-1">
+                  <Brain className="w-3.5 h-3.5" />
+                  <span>2. Raisonnement</span>
+                </div>
+                <div className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-emerald-600 dark:text-emerald-400 flex flex-col items-center gap-1">
+                  <CheckCircle className="w-3.5 h-3.5" />
+                  <span>3. Structuration</span>
+                </div>
+              </div>
+
+              {/* Bouton d'annulation */}
+              <button
+                onClick={resetApp}
+                className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold transition-all border border-slate-200 dark:border-slate-700"
+              >
+                Annuler le traitement
+              </button>
+            </div>
           </div>
         )}
 
