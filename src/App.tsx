@@ -5958,17 +5958,8 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                                 </ul>
                               )}
 
-                              {/* Actions ciblées sur cette notion */}
+                              {/* Actions ciblées sur cette notion (documents de révision uniquement) */}
                               <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-                                <button
-                                  onClick={() => generateQuizFromNotion(notion, docAnalysisResult.docName)}
-                                  className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 dark:text-indigo-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                                  title="Générer un QCM ciblé sur cette notion"
-                                >
-                                  <BrainCircuit className="w-3.5 h-3.5" />
-                                  <span>Générer QCM</span>
-                                </button>
-
                                 <button
                                   onClick={() => generateFactSheetFromNotion(notion, docAnalysisResult.docName)}
                                   className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 dark:text-emerald-300 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
@@ -6012,12 +6003,6 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                       <p className="text-xs text-slate-600 dark:text-slate-300 mb-3 leading-relaxed">{notion.summary}</p>
                       
                       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                        <button
-                          onClick={() => generateQuizFromNotion(notion, docAnalysisResult.docName)}
-                          className="px-2.5 py-1 rounded-md bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300 text-xs font-bold hover:bg-indigo-200 transition-colors"
-                        >
-                          QCM
-                        </button>
                         <button
                           onClick={() => generateFactSheetFromNotion(notion, docAnalysisResult.docName)}
                           className="px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300 text-xs font-bold hover:bg-emerald-200 transition-colors"
