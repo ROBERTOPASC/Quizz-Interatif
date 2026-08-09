@@ -950,6 +950,99 @@ export default function App() {
     return { text: combinedText.trim(), docNames, folderName };
   };
 
+  // Extract text from AI-extracted data instead of raw text
+  const extractAnalysisTextFromSource = async (
+    sourceMode: 'all_docs' | 'folder' | 'single_doc' | 'none',
+    folderId?: string,
+    docId?: string
+  ): Promise<{ text: string, docNames: string[], folderName?: string }> => {
+    if (sourceMode === 'none') {
+      return { text: '', docNames: [] };
+    }
+
+    let docsToProcess: Array<{id: string, name: string, file: File, url: string, numPages: number, type: string, addedAt: number, folderId?: string | null}> = [];
+    let folderName = undefined;
+
+    if (sourceMode === 'all_docs') {
+      docsToProcess = libraryDocuments;
+    } else if (sourceMode === 'folder' && folderId) {
+      const f = libraryFolders.find(fold => fold.id === folderId);
+      folderName = f?.name;
+      const getSubfolderIds = (fId: string): string[] => {
+        const children = libraryFolders.filter(fold => fold.parentId === fId).map(fold => fold.id);
+        return [fId, ...children.flatMap(getSubfolderIds)];
+      };
+      const validFolderIds = getSubfolderIds(folderId);
+      docsToProcess = libraryDocuments.filter(d => d.folderId && validFolderIds.includes(d.folderId));
+    } else if (sourceMode === 'single_doc' && docId) {
+      docsToProcess = libraryDocuments.filter(d => d.id === docId);
+    }
+
+    if (docsToProcess.length === 0) {
+      return { text: '', docNames: [], folderName };
+    }
+
+    let combinedText = '';
+    const docNames: string[] = [];
+    const docNamesToMatch = docsToProcess.map(d => d.name);
+
+    // Find all analyses that match the selected documents' names
+    const matchedAnalyses = savedDocAnalyses.filter(a => docNamesToMatch.includes(a.docName));
+
+    for (const analysis of matchedAnalyses) {
+      if (!docNames.includes(analysis.docName)) {
+        docNames.push(analysis.docName);
+      }
+      
+      let txt = `\n--- DONNÉES EXTRAITES PAR L'IA DU DOCUMENT : ${analysis.docName} ---\n`;
+      txt += `SYNTHÈSE:\n${analysis.summary}\n\n`;
+      
+      if (analysis.notions && analysis.notions.length > 0) {
+        txt += `NOTIONS CLÉS:\n`;
+        analysis.notions.forEach(n => {
+          txt += `- [${n.category}] ${n.title}: ${n.summary}\n`;
+        });
+        txt += `\n`;
+      }
+      
+      if (analysis.keyFigures && analysis.keyFigures.length > 0) {
+        txt += `CHIFFRES CLÉS:\n`;
+        analysis.keyFigures.forEach(f => {
+          txt += `- ${f.figure}: ${f.context}\n`;
+        });
+        txt += `\n`;
+      }
+      
+      if (analysis.timeline && analysis.timeline.length > 0) {
+        txt += `DATES ET CHRONOLOGIE:\n`;
+        analysis.timeline.forEach(t => {
+          txt += `- ${t.date}: ${t.event}\n`;
+        });
+        txt += `\n`;
+      }
+      
+      if (analysis.entities && analysis.entities.length > 0) {
+        txt += `ACTEURS ET INSTITUTIONS:\n`;
+        analysis.entities.forEach(e => {
+          txt += `- ${e.name}: ${e.role}\n`;
+        });
+        txt += `\n`;
+      }
+      
+      if (analysis.takeaways && analysis.takeaways.length > 0) {
+        txt += `POINTS À RETENIR:\n`;
+        analysis.takeaways.forEach(t => {
+          txt += `- ${t}\n`;
+        });
+        txt += `\n`;
+      }
+      
+      combinedText += txt;
+    }
+
+    return { text: combinedText.trim(), docNames, folderName };
+  };
+
   const saveQuiz = (title: string, extractedQuestions: Question[], category?: string, subType?: string, docName?: string) => {
     const newQuiz: SavedQuiz = {
       id: Date.now().toString(),
@@ -1054,16 +1147,14 @@ const ENGLISH_TYPES = [
         break;
     }
 
-    const { text: contextText, docNames, folderName } = await extractTextFromSource(
+    const { text: contextText, docNames, folderName } = await extractAnalysisTextFromSource(
       qcmSourceMode,
       qcmSourceFolderId,
-      selectedEuDocId,
-      pdfPageRange.start,
-      pdfPageRange.end
+      selectedEuDocId
     );
 
     if (!contextText || contextText.trim().length === 0) {
-      setError("Impossible d'extraire le texte des documents de la source sélectionnée.");
+      setError("Impossible de générer le QCM : Aucun des documents sélectionnés n'a été analysé par l'IA au préalable. Veuillez d'abord analyser les documents dans la bibliothèque.");
       setAppState('UPLOAD');
       return;
     }
