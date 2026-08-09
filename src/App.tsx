@@ -3483,7 +3483,6 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 dark:focus:border-indigo-400 font-medium text-slate-700 dark:text-slate-300"
                   >
                     <option value="document_analysis">Analyse Complète du Document (Synthèse, Chiffres, Acteurs)</option>
-                    <option value="qcm">QCM (Questions à choix multiples)</option>
                     <option value="fact_sheet_general">Fiche de révision (Général/Concepts clés)</option>
                     <option value="fact_sheet_institutions">Fiche thématique: Institutions et Organes de l'UE</option>
                     <option value="fact_sheet_history">Fiche thématique: Histoire et Traités de l'UE</option>
