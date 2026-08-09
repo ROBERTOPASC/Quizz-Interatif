@@ -1170,9 +1170,16 @@ CONSIGNES OBLIGATOIRES :
 2. Toutes les questions doivent être tirées EXCLUSIVEMENT des faits, dates, événements, chiffres, institutions ou politiques décrits dans le texte des documents fournis.
 3. Pour chaque question, dans le champ 'context', insère la citation exacte ou la phrase du document d'où provient la question.
 4. Fournis exactement 4 options, l'index de la bonne réponse (0 à 3), et une explication pédagogique détaillée avec référence au document.
+
+RÈGLES CRITIQUES POUR LES RÉPONSES :
+5. Les 3 MAUVAISES RÉPONSES (distracteurs) doivent être PLAUSIBLES et CRÉDIBLES. Elles doivent appartenir au même domaine que la bonne réponse (même catégorie d'institution, même type de traité, même époque historique, etc.).
+6. NE JAMAIS inclure de réponses absurdes, farfelues ou manifestement fausses.
+7. Les 4 options doivent avoir une longueur et un niveau de détail SIMILAIRES.
+8. DISTRIBUTION DE LA BONNE RÉPONSE : Répartis la position de correctAnswerIndex de manière UNIFORME entre 0, 1, 2 et 3 sur l'ensemble des ${questionCount} questions. Environ ${Math.max(1, Math.floor(questionCount / 4))} questions par index.
+
 TOUT le contenu généré DOIT être ${langStr}.
 
-TEXTE DU/DES DOCUMENT(S) SOURCE(S) :
+DONNÉES EXTRAITES PAR L'IA DES DOCUMENT(S) SOURCE(S) :
 ${contextText.substring(0, 80000)}`;
 
     const seed = Math.floor(Math.random() * 1000000);
@@ -1249,6 +1256,20 @@ ${extractionPrompt}
       if (extractedQuestions.length === 0) {
         throw new Error("Aucune question n'a pu être générée.");
       }
+
+      // Shuffle options to eliminate position bias (correct answer always on B/C)
+      extractedQuestions = extractedQuestions.map(q => {
+        if (!q.options || q.options.length !== 4 || q.correctAnswerIndex == null) return q;
+        const correctOption = q.options[q.correctAnswerIndex];
+        // Fisher-Yates shuffle
+        const shuffled = [...q.options];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        const newCorrectIndex = shuffled.indexOf(correctOption);
+        return { ...q, options: shuffled, correctAnswerIndex: newCorrectIndex };
+      });
 
       saveQuiz(title, extractedQuestions, 'eu', subType, sourceDisplay);
       setQuestions(extractedQuestions);

@@ -156,6 +156,15 @@ export const QCM_SKILLS: Record<string, string> = {
 1. **Domaines** : Cadre institutionnel (rôles respectifs), Traités (Maastricht, Lisbonne, etc.), Politiques (PAC, Green Deal), Droit et Chiffres clés.
 2. **Précision** : Les questions doivent être sans ambiguïté et cibler des faits précis basés sur les documents sources.
 3. **Explication** : Doit être riche et didactique, rappelant le contexte historique, juridique ou textuel exact de la réponse.
+
+## RÈGLES CRITIQUES POUR LES DISTRACTEURS (mauvaises réponses)
+4. **Plausibilité obligatoire** : Les 3 mauvaises réponses doivent être PLAUSIBLES et CRÉDIBLES. Elles doivent appartenir au même domaine sémantique que la bonne réponse (ex: si la bonne réponse est "Conseil européen", les distracteurs doivent être d'autres institutions réelles comme "Conseil de l'UE", "Commission européenne", "Comité des régions" et NON des réponses absurdes ou inventées).
+5. **Pas de réponses absurdes** : Ne JAMAIS inclure de réponses manifestement fausses, farfelues, anachroniques ou hors-sujet qui permettraient d'éliminer par simple bon sens.
+6. **Confusions typiques** : Construire les distracteurs autour de confusions fréquentes chez les candidats (ex: confondre Conseil européen / Conseil de l'UE, majorité qualifiée / unanimité, directive / règlement).
+7. **Homogénéité formelle** : Les 4 options doivent avoir une longueur et un niveau de détail similaires. La bonne réponse ne doit PAS être systématiquement la plus longue ou la plus détaillée.
+
+## RÈGLES DE POSITIONNEMENT DE LA BONNE RÉPONSE
+8. **Distribution uniforme OBLIGATOIRE** : La position de la bonne réponse (correctAnswerIndex) DOIT varier de manière équilibrée entre 0, 1, 2 et 3 sur l'ensemble du QCM. Ne PAS concentrer les bonnes réponses sur les index 1 et 2.
 `,
   digcomp: `
 # COMPETENCE : COMPÉTENCES NUMÉRIQUES (DIGCOMP 2.2)
