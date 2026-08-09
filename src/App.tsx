@@ -239,7 +239,7 @@ export default function App() {
     reader.readAsText(file);
   };
   
-  const [uploadedDocument, setUploadedDocument] = useState<{file: File, url: string, numPages: number, type: string} | null>(null);
+  const [uploadedDocument, setUploadedDocument] = useState<{file: File, url: string, numPages: number, type: string, folderId?: string | null} | null>(null);
   const [pdfPageRange, setPdfPageRange] = useState<{start: number, end: number}>({start: 1, end: 1});
   const [chunkMode, setChunkMode] = useState<'manual' | 'auto5' | 'auto20'>('manual');
   const [processingProgress, setProcessingProgress] = useState<{current: number, total: number} | null>(null);
