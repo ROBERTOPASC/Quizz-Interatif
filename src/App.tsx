@@ -279,7 +279,151 @@ export default function App() {
   const [factSheetSourceMode, setFactSheetSourceMode] = useState<'none' | 'all_docs' | 'folder' | 'single_doc'>('none');
   const [factSheetSourceFolderId, setFactSheetSourceFolderId] = useState<string>('');
 
+  // Local Directory Storage (File System Access API)
+  const [dirHandle, setDirHandle] = useState<FileSystemDirectoryHandle | null>(null);
+  const [dirName, setDirName] = useState<string | null>(null);
+  const [dirSyncStatus, setDirSyncStatus] = useState<'none' | 'connected' | 'syncing' | 'error'>('none');
+
+  const saveFileToLocalDir = async (filename: string, content: string | object) => {
+    if (!dirHandle) return;
+    try {
+      const fileHandle = await (dirHandle as any).getFileHandle(filename, { create: true });
+      const writable = await fileHandle.createWritable();
+      const data = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+      await writable.write(data);
+      await writable.close();
+    } catch (e) {
+      console.error(`Erreur écriture fichier local (${filename})`, e);
+    }
+  };
+
+  const deleteFileFromLocalDir = async (filename: string) => {
+    if (!dirHandle) return;
+    try {
+      await (dirHandle as any).removeEntry(filename);
+    } catch (e) {
+      // Ignorer si le fichier n'existait pas encore sur le disque
+    }
+  };
+
+  const syncReadFromFolder = async (handle: FileSystemDirectoryHandle) => {
+    setDirSyncStatus('syncing');
+    try {
+      const loadedQuizzes: SavedQuiz[] = [];
+      const loadedFactSheets: Array<any> = [];
+      const loadedFlashcards: Array<any> = [];
+      const loadedAnalyses: Array<any> = [];
+
+      for await (const entry of (handle as any).values()) {
+        if (entry.kind === 'file') {
+          const file = await entry.getFile();
+          if (entry.name.endsWith('.json')) {
+            const text = await file.text();
+            try {
+              const parsed = JSON.parse(text);
+              if (parsed.questions && Array.isArray(parsed.questions)) {
+                loadedQuizzes.push(parsed);
+              } else if (parsed.cards && Array.isArray(parsed.cards)) {
+                loadedFlashcards.push(parsed);
+              } else if (parsed.concepts || parsed.topic) {
+                loadedFactSheets.push(parsed);
+              } else if (parsed.executiveSummary || parsed.keyPoints) {
+                loadedAnalyses.push(parsed);
+              } else if (parsed.app && parsed.data) {
+                if (Array.isArray(parsed.data.savedQuizzes)) loadedQuizzes.push(...parsed.data.savedQuizzes);
+                if (Array.isArray(parsed.data.savedFactSheets)) loadedFactSheets.push(...parsed.data.savedFactSheets);
+                if (Array.isArray(parsed.data.savedFlashcards)) loadedFlashcards.push(...parsed.data.savedFlashcards);
+                if (Array.isArray(parsed.data.savedDocAnalyses)) loadedAnalyses.push(...parsed.data.savedDocAnalyses);
+              }
+            } catch (e) {}
+          } else if (entry.name.endsWith('.md')) {
+            const text = await file.text();
+            const title = entry.name.replace(/\.md$/, '').replace(/_/g, ' ');
+            loadedFactSheets.push({
+              id: entry.name,
+              title,
+              content: text,
+              createdAt: file.lastModified || Date.now()
+            });
+          }
+        }
+      }
+
+      if (loadedQuizzes.length > 0) {
+        setSavedQuizzes(prev => {
+          const existingIds = new Set(prev.map(q => q.id));
+          const newItems = loadedQuizzes.filter(q => !existingIds.has(q.id));
+          return [...prev, ...newItems];
+        });
+      }
+      if (loadedFactSheets.length > 0) {
+        setSavedFactSheets(prev => {
+          const existingIds = new Set(prev.map(s => s.id));
+          const newItems = loadedFactSheets.filter(s => !existingIds.has(s.id));
+          return [...prev, ...newItems];
+        });
+      }
+      if (loadedFlashcards.length > 0) {
+        setSavedFlashcards(prev => {
+          const existingIds = new Set(prev.map(f => f.id));
+          const newItems = loadedFlashcards.filter(f => !existingIds.has(f.id));
+          return [...prev, ...newItems];
+        });
+      }
+      if (loadedAnalyses.length > 0) {
+        setSavedDocAnalyses(prev => {
+          const existingIds = new Set(prev.map(a => a.id));
+          const newItems = loadedAnalyses.filter(a => !existingIds.has(a.id));
+          return [...prev, ...newItems];
+        });
+      }
+      setDirSyncStatus('connected');
+    } catch (e) {
+      console.error("Erreur lors de la lecture du dossier local", e);
+      setDirSyncStatus('error');
+    }
+  };
+
+  const connectLocalFolder = async () => {
+    try {
+      if (!('showDirectoryPicker' in window)) {
+        alert("L'API File System Access n'est pas supportée sur ce navigateur. Veuillez utiliser Chrome ou Edge.");
+        return;
+      }
+      const handle = await (window as any).showDirectoryPicker({ mode: 'readwrite' });
+      setDirHandle(handle);
+      setDirName(handle.name);
+      setDirSyncStatus('connected');
+      await set('working_dir_handle', handle);
+      showLibraryNotification(`Dossier local "${handle.name}" connecté avec succès !`);
+      await syncReadFromFolder(handle);
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error("Erreur lors de la connexion du dossier local", err);
+      }
+    }
+  };
+
   useEffect(() => {
+    get<FileSystemDirectoryHandle>('working_dir_handle').then(async (handle) => {
+      if (handle) {
+        try {
+          const perm = await (handle as any).queryPermission({ mode: 'readwrite' });
+          if (perm === 'granted') {
+            setDirHandle(handle);
+            setDirName(handle.name);
+            setDirSyncStatus('connected');
+            await syncReadFromFolder(handle);
+          } else {
+            setDirName(handle.name + " (Cliquer pour autoriser)");
+            setDirSyncStatus('error');
+          }
+        } catch (e) {
+          console.error("Erreur chargement dossier local réinventé", e);
+        }
+      }
+    }).catch(console.error);
+
     get('libraryDocuments').then((docs) => {
       if (docs) {
         const parsedDocs = docs.map((d: any) => ({
@@ -308,21 +452,9 @@ export default function App() {
       if (analyses) setSavedDocAnalyses(analyses);
     }).catch(console.error);
 
-    // Load savedQuizzes from IndexedDB with localStorage fallback/migration
     get('savedQuizzes').then((quizzes) => {
       if (quizzes && Array.isArray(quizzes) && quizzes.length > 0) {
         setSavedQuizzes(quizzes);
-      } else {
-        const loaded = localStorage.getItem('qcm_saved_quizzes');
-        if (loaded) {
-          try {
-            const parsed = JSON.parse(loaded);
-            setSavedQuizzes(parsed);
-            set('savedQuizzes', parsed).catch(console.error);
-          } catch (e) {
-            console.error("Failed to parse saved quizzes from localStorage", e);
-          }
-        }
       }
     }).catch(console.error);
 
@@ -831,7 +963,7 @@ export default function App() {
     const updatedQuizzes = [newQuiz, ...savedQuizzes];
     setSavedQuizzes(updatedQuizzes);
     set('savedQuizzes', updatedQuizzes).catch(console.error);
-    try { localStorage.setItem('qcm_saved_quizzes', JSON.stringify(updatedQuizzes)); } catch (e) {}
+    saveFileToLocalDir(`quiz_${newQuiz.id}.json`, newQuiz);
   };
 
   const deleteQuiz = (id: string, e: React.MouseEvent) => {
@@ -839,7 +971,7 @@ export default function App() {
     const updatedQuizzes = savedQuizzes.filter(q => q.id !== id);
     setSavedQuizzes(updatedQuizzes);
     set('savedQuizzes', updatedQuizzes).catch(console.error);
-    try { localStorage.setItem('qcm_saved_quizzes', JSON.stringify(updatedQuizzes)); } catch (e) {}
+    deleteFileFromLocalDir(`quiz_${id}.json`);
   };
 
   const loadQuiz = (quiz: SavedQuiz) => {
@@ -2688,6 +2820,22 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
             >
               <Database className="w-4 h-4 text-[#2f647e] dark:text-[#76a9c5]" />
               <span className="hidden sm:inline font-semibold">Base DB</span>
+            </button>
+
+            <button
+              onClick={connectLocalFolder}
+              className={cn(
+                "flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer border shadow-2xs",
+                dirSyncStatus === 'connected'
+                  ? "text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-700"
+                  : "text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700"
+              )}
+              title={dirName ? `Dossier actif : ${dirName}` : "Connecter un dossier local pour enregistrer et lire automatiquement les fichiers"}
+            >
+              <FolderKanban className="w-4 h-4" />
+              <span className="hidden sm:inline font-semibold">
+                {dirName ? `Dossier: ${dirName}` : "Dossier local"}
+              </span>
             </button>
 
             <button
