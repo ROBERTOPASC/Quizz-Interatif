@@ -131,10 +131,22 @@ export const QCM_SKILLS: Record<string, string> = {
 Évaluer la capacité du candidat à tirer des conclusions logiques à partir de données numériques (tableaux ou textes).
 
 ## CONSIGNES STRICTES DE RÉDACTION
-1. **Contexte** : Fournir systématiquement un contexte de données réaliste (tableaux Markdown avec des statistiques, budgets, démographie).
+1. **Contexte** : Le tableau de donnees dans le champ context est OBLIGATOIRE. Il doit contenir au minimum 3 lignes et 3 colonnes de donnees numeriques realistes (budgets, demographie, pourcentages).
 2. **Types de calculs** : Pourcentages, ratios, règles de trois, interprétation de données.
-3. **Distracteurs** : Les 3 mauvaises réponses doivent correspondre à des erreurs de calcul communes (ex: oublier une étape, inverser ratio).
-4. **Explication** : Doit être une démonstration pas-à-pas de la méthode la plus rapide et logique pour arriver au résultat.
+3. **Explication** : Doit être une démonstration pas-à-pas de la méthode la plus rapide et logique pour arriver au résultat.
+
+## REGLES CRITIQUES POUR LES DISTRACTEURS
+4. Les distracteurs doivent provenir d'erreurs de calcul realistes (oubli d'une etape, confusion d'unite, confusion entre taux et valeur absolue).
+5. Pas de reponses absurdes. Toutes les options doivent etre plausibles et credibles.
+6. Homogeneite : les options doivent etre du meme ordre de grandeur et de meme format.
+
+## CALIBRAGE DE LA DIFFICULTE
+- Facile : rappel direct de donnees, calcul simple.
+- Moyen : croisement de 2 informations, calcul modere.
+- Difficile : analyse multi-etapes, pieges d'exceptions, comparaisons croisees.
+
+## DISTRIBUTION UNIFORME
+La position de la bonne réponse (correctAnswerIndex) DOIT varier de manière équilibrée entre 0, 1, 2 et 3 sur l'ensemble du QCM. Ne PAS concentrer les bonnes réponses sur les index 1 et 2.
 `,
   verbal: `
 # COMPETENCE : RAISONNEMENT VERBAL EPSO AD5
@@ -142,10 +154,22 @@ export const QCM_SKILLS: Record<string, string> = {
 Évaluer la capacité du candidat à analyser des informations complexes dans un texte institutionnel.
 
 ## CONSIGNES STRICTES DE RÉDACTION
-1. **Contexte** : Texte formel (100-150 mots) de type institutionnel, rapport de l'UE ou article scientifique.
+1. **Contexte** : Le texte dans le champ context doit contenir entre 150 et 200 mots et sembler extrait d'un rapport officiel de l'UE.
 2. **Formulation** : Demander "Selon le texte, laquelle de ces affirmations est correcte ?" ou "Que peut-on déduire ?".
-3. **Distracteurs** : Les mauvaises réponses doivent utiliser des pièges typiques EPSO : "extrapolation (non mentionné)", "inversion de sens", "généralisation abusive".
-4. **Explication** : Justifier la bonne réponse par une citation du texte et expliquer brièvement pourquoi chaque distracteur est invalide.
+3. **Explication** : Justifier la bonne réponse par une citation du texte et expliquer brièvement pourquoi chaque distracteur est invalide.
+
+## REGLES CRITIQUES POUR LES DISTRACTEURS
+4. Les distracteurs doivent se baser sur les pieges typiques EPSO : extrapolation injustifiee, inversion de polarite, generalisation abusive, verite partielle.
+5. Plausibilite obligatoire : pas de reponses absurdes ou evidemment fausses sans lire le texte.
+6. Homogeneite : meme longueur et style pour toutes les options.
+
+## CALIBRAGE DE LA DIFFICULTE
+- Facile : rappel direct d'un fait explicite dans le texte.
+- Moyen : croisement de 2 informations explicites du texte, deductions moderees.
+- Difficile : analyse multi-etapes, pieges d'exceptions, comparaisons croisees.
+
+## DISTRIBUTION UNIFORME
+La position de la bonne réponse (correctAnswerIndex) DOIT varier de manière équilibrée entre 0, 1, 2 et 3 sur l'ensemble du QCM. Ne PAS concentrer les bonnes réponses sur les index 1 et 2.
 `,
   eu: `
 # COMPETENCE : CONNAISSANCE DE L'UNION EUROPÉENNE
@@ -175,6 +199,19 @@ export const QCM_SKILLS: Record<string, string> = {
 1. **Domaines** : Sécurité des données, traitement de l'information, communication en ligne, résolution de problèmes techniques.
 2. **Format** : Privilégier des mises en situation de la vie professionnelle ("Vous recevez un email...", "Vous devez sécuriser...").
 3. **Explication** : Rappeler les bonnes pratiques professionnelles et de cybersécurité liées à la question.
+
+## REGLES CRITIQUES POUR LES DISTRACTEURS
+4. Distracteurs : Pratiques informatiques plausibles mais incorrectes (ex: mauvaises habitudes communes).
+5. Pas de reponses absurdes. Toutes les options doivent paraitre credibles.
+6. Homogeneite : longueur et detail similaires.
+
+## CALIBRAGE DE LA DIFFICULTE
+- Facile : rappel direct de bonnes pratiques, procedures simples.
+- Moyen : croisement de 2 informations, situations avec un peu d'ambiguite.
+- Difficile : analyse multi-etapes, pieges subtils, resolution de problemes complexes avec exceptions.
+
+## DISTRIBUTION UNIFORME
+La position de la bonne réponse (correctAnswerIndex) DOIT varier de manière équilibrée entre 0, 1, 2 et 3 sur l'ensemble du QCM. Ne PAS concentrer les bonnes réponses sur les index 1 et 2.
 `,
   english: `
 # COMPETENCE : ANGLAIS (EUFTE)
@@ -182,9 +219,21 @@ export const QCM_SKILLS: Record<string, string> = {
 Évaluer l'anglais professionnel, administratif et institutionnel niveau B2/C1.
 
 ## CONSIGNES STRICTES DE RÉDACTION
-1. **Contexte** : Les phrases à compléter ou à analyser doivent sembler extraites de mémos de la Commission ou de directives.
-2. **Difficulté** : Pièges grammaticaux classiques (false friends, prepositions, phrasal verbs, temps complexes).
-3. **Explication** : Rédigée en FRANÇAIS, elle doit expliquer la règle de grammaire précise ou la nuance lexicale testée.
+1. **Contexte** : Le texte doit ressembler à des extraits de memos de la Commission europeenne.
+2. **Explication** : Rédigée en FRANÇAIS, elle doit expliquer la règle de grammaire précise ou la nuance lexicale testée.
+
+## REGLES CRITIQUES POUR LES DISTRACTEURS
+3. Distracteurs : grammaticalement plausibles mais incorrects (faux amis, mauvaise preposition, mauvais temps).
+4. Pas de reponses absurdes.
+5. Homogeneite de longueur entre les options.
+
+## CALIBRAGE DE LA DIFFICULTE
+- Facile : grammaire de base, vocabulaire standard.
+- Moyen : conditionnel / subjonctif, phrasal verbs.
+- Difficile : collocations nuancees, idiomes administratifs complexes.
+
+## DISTRIBUTION UNIFORME
+La position de la bonne réponse (correctAnswerIndex) DOIT varier de manière équilibrée entre 0, 1, 2 et 3 sur l'ensemble du QCM. Ne PAS concentrer les bonnes réponses sur les index 1 et 2.
 `
 };
 

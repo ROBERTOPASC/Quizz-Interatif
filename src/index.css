@@ -91,3 +91,188 @@ select, .custom-select {
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* ============================================ */
+/* Callouts thematiques pour fiches de revision */
+/* ============================================ */
+.callout {
+  border-left: 4px solid;
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1rem;
+}
+.callout-institutions {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+.dark .callout-institutions {
+  background: rgba(59, 130, 246, 0.1);
+}
+.callout-policies {
+  border-color: #10b981;
+  background: #ecfdf5;
+}
+.dark .callout-policies {
+  background: rgba(16, 185, 129, 0.1);
+}
+.callout-dates {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+.dark .callout-dates {
+  background: rgba(245, 158, 11, 0.1);
+}
+.callout-vocabulary {
+  border-color: #8b5cf6;
+  background: #f5f3ff;
+}
+.dark .callout-vocabulary {
+  background: rgba(139, 92, 246, 0.1);
+}
+
+/* ================================ */
+/* Timeline verticale               */
+/* ================================ */
+.timeline {
+  position: relative;
+  padding-left: 2rem;
+}
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(to bottom, #f59e0b, #ef4444, #8b5cf6);
+  border-radius: 9999px;
+}
+.timeline-item {
+  position: relative;
+  padding-bottom: 1.5rem;
+}
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -1.65rem;
+  top: 0.35rem;
+  width: 12px;
+  height: 12px;
+  background: #f59e0b;
+  border: 3px solid white;
+  border-radius: 50%;
+  z-index: 1;
+}
+.dark .timeline-item::before {
+  border-color: #0f172a;
+}
+
+/* ================================ */
+/* Ergonomie tactile tablette       */
+/* ================================ */
+@media (pointer: coarse) {
+  button, [role="button"], a {
+    min-height: 44px;
+  }
+  select, input[type="range"] {
+    min-height: 44px;
+  }
+}
+
+/* ================================ */
+/* Feuille de style d'impression    */
+/* ================================ */
+@media print {
+  /* Masquer tout sauf la zone de contenu imprimable */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt !important;
+    line-height: 1.5 !important;
+  }
+
+  /* Masquer les elements d'interface */
+  header, nav, footer,
+  button, [role="button"],
+  input, select, textarea,
+  .no-print,
+  [data-no-print] {
+    display: none !important;
+  }
+
+  /* Garder visible uniquement le contenu de la fiche */
+  .print-area {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Sauts de page intelligents */
+  .print-page-break-avoid {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .print-page-break-before {
+    page-break-before: always;
+    break-before: page;
+  }
+
+  /* Callouts imprimables */
+  .callout {
+    border-left: 4px solid !important;
+    background: transparent !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .callout-institutions { border-color: #3b82f6 !important; }
+  .callout-policies { border-color: #10b981 !important; }
+  .callout-dates { border-color: #f59e0b !important; }
+  .callout-vocabulary { border-color: #8b5cf6 !important; }
+
+  /* Timeline imprimable */
+  .timeline::before {
+    background: #94a3b8 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .timeline-item::before {
+    background: #f59e0b !important;
+    border-color: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Badges et tags imprimables */
+  .print-badge {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    border: 1px solid #cbd5e1 !important;
+  }
+
+  /* En-tete d'impression */
+  .print-header {
+    border-bottom: 2px solid #2f647e !important;
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  /* Police */
+  * {
+    font-family: 'Manrope', system-ui, sans-serif !important;
+  }
+  h1, h2, h3 {
+    font-family: 'Libre Caslon Text', Georgia, serif !important;
+  }
+
+  /* Pages */
+  @page {
+    margin: 1.5cm 2cm;
+    size: A4;
+  }
+}
+

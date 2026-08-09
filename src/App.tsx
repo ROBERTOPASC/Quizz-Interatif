@@ -5827,43 +5827,116 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
         )}
 
         {appState === 'FACT_SHEET' && factSheetContent && (
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-3xl mx-auto print-area">
             <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
-              <div className="p-8 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-4">
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <FileText className="w-6 h-6 text-emerald-500" />
-                  {factSheetContent.title}
-                </h2>
-                <button
-                  onClick={resetApp}
-                  className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-full transition-colors"
-                >
-                  <XCircle className="w-6 h-6" />
-                </button>
+              {/* En-tete structure */}
+              <div className="p-8 border-b border-slate-200 dark:border-slate-800 print-header">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white font-serif flex items-center gap-3 mb-3">
+                      <FileText className="w-7 h-7 text-emerald-500 shrink-0" />
+                      {factSheetContent.title}
+                    </h2>
+                    <div className="flex flex-wrap gap-2">
+                      {factSheetContent.topic && (
+                        <span className="print-badge px-3 py-1 rounded-full text-xs font-bold bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                          {factSheetContent.topic}
+                        </span>
+                      )}
+                      {factSheetContent.docName && (
+                        <span className="print-badge px-3 py-1 rounded-full text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                          Source: {factSheetContent.docName}
+                        </span>
+                      )}
+                      <span className="print-badge px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                        {factSheetContent.concepts ? `${factSheetContent.concepts.length} concepts` : 'Fiche Markdown'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 no-print">
+                    <button
+                      onClick={() => window.print()}
+                      className="p-2.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-colors border border-indigo-200 dark:border-indigo-800"
+                      title="Exporter en PDF"
+                    >
+                      <Download className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={resetApp}
+                      className="p-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <XCircle className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
               </div>
+
+              {/* Corps de la fiche */}
               <div className="p-8 bg-slate-50 dark:bg-slate-950">
                 {factSheetContent.concepts ? (
-                  <div className="space-y-6">
-                    {factSheetContent.concepts.map((concept, idx) => (
-                      <div key={idx} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-3">
-                          <h3 className="text-xl font-bold text-indigo-700 dark:text-indigo-400">{concept.term}</h3>
-                          {concept.date && <span className="text-sm font-semibold px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg whitespace-nowrap">{concept.date}</span>}
+                  <div className="space-y-5">
+                    {factSheetContent.concepts.map((concept: any, idx: number) => {
+                      // Detection automatique du type de callout
+                      const term = (concept.term || '').toLowerCase();
+                      const category = (concept.category || '').toLowerCase();
+                      let calloutClass = 'callout';
+                      let iconColor = 'text-slate-500';
+                      if (/institution|organe|parlement|commission|conseil|cour|bce|comit/i.test(term + ' ' + category)) {
+                        calloutClass += ' callout-institutions';
+                        iconColor = 'text-blue-500';
+                      } else if (/politique|pac|green|march|cohésion|pesc|concurrence|numérique/i.test(term + ' ' + category)) {
+                        calloutClass += ' callout-policies';
+                        iconColor = 'text-emerald-500';
+                      } else if (/date|trait|chronolog|histori|fondateur|schuman|élargissement|maastricht|lisbonne|rome|ceca/i.test(term + ' ' + category)) {
+                        calloutClass += ' callout-dates';
+                        iconColor = 'text-amber-500';
+                      } else if (/vocab|sigle|acronym|terme|juridique|définition|glossaire/i.test(term + ' ' + category)) {
+                        calloutClass += ' callout-vocabulary';
+                        iconColor = 'text-violet-500';
+                      } else {
+                        calloutClass += ' callout-institutions';
+                        iconColor = 'text-blue-500';
+                      }
+
+                      return (
+                        <div key={idx} className={`${calloutClass} print-page-break-avoid`}>
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 mb-3">
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                              <BookOpen className={`w-5 h-5 ${iconColor} shrink-0`} />
+                              {concept.term}
+                            </h3>
+                            {concept.date && (
+                              <span className="print-badge text-xs font-bold px-3 py-1 bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 rounded-lg whitespace-nowrap border border-amber-200 dark:border-amber-800">
+                                {concept.date}
+                              </span>
+                            )}
+                          </div>
+
+                          {concept.definition && (
+                            <div className="mb-3">
+                              <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Definition</p>
+                              <p className="text-slate-800 dark:text-slate-200 font-medium leading-relaxed">{concept.definition}</p>
+                            </div>
+                          )}
+
+                          {concept.explanation && (
+                            <div className="mb-3">
+                              <p className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Explication</p>
+                              <p className="text-slate-700 dark:text-slate-300 leading-relaxed">{concept.explanation}</p>
+                            </div>
+                          )}
+
+                          {concept.example && (
+                            <div className="bg-white/60 dark:bg-slate-800/40 p-3 rounded-lg border border-slate-200/50 dark:border-slate-700/50">
+                              <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                                <CheckCircle className="w-3.5 h-3.5" /> Exemple concret
+                              </p>
+                              <p className="text-slate-700 dark:text-slate-300 text-sm italic leading-relaxed">"{concept.example}"</p>
+                            </div>
+                          )}
                         </div>
-                        <div className="mb-4">
-                          <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Définition</h4>
-                          <p className="text-slate-800 dark:text-slate-200 font-medium">{concept.definition}</p>
-                        </div>
-                        <div className="mb-4">
-                          <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Explication</h4>
-                          <p className="text-slate-700 dark:text-slate-300">{concept.explanation}</p>
-                        </div>
-                        <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-xl border border-emerald-100 dark:border-emerald-800/30">
-                          <h4 className="text-sm font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-1 flex items-center gap-1"><CheckCircle className="w-4 h-4"/> Exemple</h4>
-                          <p className="text-emerald-900 dark:text-emerald-200 text-sm italic">"{concept.example}"</p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="prose prose-slate dark:prose-invert max-w-none text-slate-800 dark:text-slate-200">
@@ -5952,32 +6025,39 @@ Génère une fiche de révision ciblée structurée avec les concepts clés à r
         )}
 
         {appState === 'DOCUMENT_ANALYSIS' && docAnalysisResult && (
-          <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 print-area">
             {/* Header Card */}
             <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-slate-100 dark:border-slate-800 print-header">
                 <div>
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <span className="px-3 py-1 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1">
+                    <span className="print-badge px-3 py-1 bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1">
                       <Sparkles className="w-3.5 h-3.5" />
                       Analyse RAG Document
                     </span>
                     {docAnalysisResult.pageRange && (
-                      <span className="px-3 py-1 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 rounded-full text-xs font-semibold">
+                      <span className="print-badge px-3 py-1 bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 rounded-full text-xs font-semibold">
                         {docAnalysisResult.pageRange}
                       </span>
                     )}
-                    <span className="px-3 py-1 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-full text-xs font-mono font-bold flex items-center gap-1">
+                    <span className="print-badge px-3 py-1 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-full text-xs font-mono font-bold flex items-center gap-1">
                       <Hash className="w-3 h-3" />
                       Seed #{docAnalysisResult.seed}
                     </span>
                   </div>
-                  <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white leading-tight">
+                  <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-white leading-tight font-serif">
                     {docAnalysisResult.docName}
                   </h1>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 no-print">
+                  <button
+                    onClick={() => window.print()}
+                    className="p-2.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-xl transition-colors border border-indigo-200 dark:border-indigo-800"
+                    title="Exporter en PDF"
+                  >
+                    <Download className="w-5 h-5" />
+                  </button>
                   <button
                     onClick={() => analyzeDocument()}
                     className="flex items-center gap-2 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-bold transition-all shadow-sm"
